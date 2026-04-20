@@ -192,13 +192,16 @@ class PhaseGateReport:
             else:
                 dim_scores.setdefault(g.dimension, []).append(g.score)
 
-        # Average per dimension, 5.0 neutral for dimensions with zero gates
+        # Average per dimension. Dimensions with zero gates are excluded from the
+        # score (not defaulted to 5.0) — otherwise phases with partial gate
+        # coverage (e.g. PHASE_EARLY covers only D1+D2) get a structural μ ceiling
+        # of ~6.11 even with perfect reports. `coverage` remains the separate
+        # signal for gate-coverage completeness.
         self.dimension_scores = {}
         for dim_id in DIMENSIONS:
             scores = dim_scores.get(dim_id, [])
-            self.dimension_scores[dim_id] = (
-                sum(scores) / len(scores) if scores else 5.0
-            )
+            if scores:
+                self.dimension_scores[dim_id] = sum(scores) / len(scores)
 
         self.mu = calculate_mu(self.dimension_scores)
 

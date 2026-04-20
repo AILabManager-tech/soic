@@ -54,10 +54,17 @@ DIMENSIONS = {
 
 
 def calculate_mu(scores: dict[str, float]) -> float:
-    """Calcule mu = moyenne ponderee des dimensions."""
-    total_weight = sum(d["weight"] for d in DIMENSIONS.values())
-    weighted_sum = sum(
-        scores.get(dim, 0.0) * DIMENSIONS[dim]["weight"]
-        for dim in DIMENSIONS
-    )
+    """Weighted average of the dimensions actually present in `scores`.
+
+    Dimensions absent from `scores` are skipped from both numerator and
+    denominator (they do not bias μ toward a neutral 5.0). Callers should use
+    `coverage` as the separate signal for measurement completeness.
+    """
+    present = [dim for dim in scores if dim in DIMENSIONS]
+    if not present:
+        return 0.0
+    total_weight = sum(DIMENSIONS[dim]["weight"] for dim in present)
+    if total_weight == 0:
+        return 0.0
+    weighted_sum = sum(scores[dim] * DIMENSIONS[dim]["weight"] for dim in present)
     return weighted_sum / total_weight
