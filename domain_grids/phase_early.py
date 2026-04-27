@@ -1,6 +1,14 @@
-"""SOIC v3.0 — PHASE_EARLY: 4 lightweight gates for phases 0-3.
+"""SOIC v3.0 — PHASE_EARLY: lightweight gates for phases 0-3.
 
 These gates evaluate the phase report (no site exists yet).
+
+Gate inventory:
+- PE-01..PE-04: generic report-quality gates (D1, D2). Run for any phase.
+- PE-05..PE-09: ph0-discovery specific gates (D3, D5, D6, D7, D9). Read
+  ``ph0-discovery-report.md`` directly; SKIP if absent. Together with
+  PE-01..PE-04 they expand the dimensional coverage of ph0 from D1+D2 to
+  seven dimensions, fixing the historical structural plateau where partial
+  coverage capped μ at ~6.11 (cf. BUG_SOIC_PH0_GATES_INCOMPLETS.md).
 """
 
 from __future__ import annotations
@@ -44,6 +52,27 @@ def _get_report_content(client_dir: str, phase: str = "") -> str:
         if path.exists():
             return path.read_text(encoding="utf-8")
     return ""
+
+
+def _get_ph0_report(client_dir: str) -> str:
+    """Read ``ph0-discovery-report.md`` strictly (no fallback)."""
+    path = Path(client_dir) / _REPORT_MAP["ph0-discovery"]
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return ""
+
+
+# Tech stack keywords used by PE-05 to count distinct technologies cited.
+_STACK_KEYWORDS = (
+    r"Next\.?js|React|Vue|Angular|Svelte|Astro|Remix|Nuxt|"
+    r"Tailwind|TypeScript|JavaScript|Node\.?js|Deno|Bun|"
+    r"Vercel|Netlify|Cloudflare|AWS|Azure|GCP|"
+    r"PostgreSQL|MySQL|MongoDB|Redis|Supabase|Firebase|"
+    r"Docker|Kubernetes|Python|Django|FastAPI|Flask|Express|"
+    r"GraphQL|REST|gRPC|"
+    r"WordPress|Shopify|Webflow|Wix|Squarespace|Drupal|"
+    r"Eleventy|Jekyll|Hugo|Gatsby|Elementor"
+)
 
 
 @dataclass
@@ -205,12 +234,306 @@ class NoPlaceholdersGate(WebGate):
         )
 
 
+@dataclass
+class StackDetectedGate(WebGate):
+    """PE-05: ph0 report identifies the sector stack (technos + perf/sec)."""
+
+    gate_id: str = "PE-05"
+    name: str = "report-stack-detected"
+    dimension: str = "D3"
+    tool: str = "filesystem"
+
+    def run(self, client_dir: str, site_dir: str) -> GateResult:
+        content = _get_ph0_report(client_dir)
+        if not content:
+            return self._skip_result("ph0-discovery-report.md not present")
+
+        # Section §3 (tech-inspector / stack) — heuristics: numbered heading,
+        # explicit "tech-inspector" or "stack" wording.
+        section_present = bool(
+            re.search(r"(?im)^#{1,3}\s*§?\s*3[\.\s]", content)
+            or re.search(r"(?i)tech[- ]inspector|stack\s+(?:technique|d[ée]tect)", content)
+        )
+        if not section_present:
+            return GateResult(
+                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+                status=GateStatus.FAIL, score=2.0,
+                evidence="No §3 / tech-inspector / stack section detected",
+                duration_ms=0, command="",
+            )
+
+        techs = re.findall(rf"\b(?:{_STACK_KEYWORDS})\b", content, flags=re.IGNORECASE)
+        n_distinct = len({t.lower() for t in techs})
+        perf_sec_mentioned = bool(re.search(r"(?i)\b(perf|performance|s[ée]curit[ée]|security|hsts|csp)\b", content))
+
+        if n_distinct >= 3 and perf_sec_mentioned:
+            score, evidence = 10.0, f"{n_distinct} technologies + perf/sec mentioned"
+            status = GateStatus.PASS
+        elif n_distinct >= 2:
+            score, evidence = 7.5, f"{n_distinct} technologies identified"
+            status = GateStatus.PASS
+        elif n_distinct >= 1:
+            score, evidence = 5.0, "1 technology mentioned, depth limited"
+            status = GateStatus.FAIL
+        else:
+            score, evidence = 2.0, "No clear technology identified"
+            status = GateStatus.FAIL
+
+        return GateResult(
+            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+            status=status, score=score, evidence=evidence,
+            duration_ms=0, command="",
+        )
+
+
+@dataclass
+class UxPatternsGate(WebGate):
+    """PE-06: ph0 report lists UX patterns + anti-patterns + a11y."""
+
+    gate_id: str = "PE-06"
+    name: str = "report-ux-patterns"
+    dimension: str = "D5"
+    tool: str = "filesystem"
+
+    def run(self, client_dir: str, site_dir: str) -> GateResult:
+        content = _get_ph0_report(client_dir)
+        if not content:
+            return self._skip_result("ph0-discovery-report.md not present")
+
+        section_present = bool(
+            re.search(r"(?im)^#{1,3}\s*§?\s*4[\.\s]", content)
+            or re.search(r"(?i)ux[- ]analyst|patterns?\s+ux|patterns?\s+dominants?", content)
+        )
+        if not section_present:
+            return GateResult(
+                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+                status=GateStatus.FAIL, score=2.0,
+                evidence="No §4 / ux-analyst / UX patterns section detected",
+                duration_ms=0, command="",
+            )
+
+        patterns = re.findall(r"\bP\d{2}\b", content)
+        n_patterns = len(set(patterns))
+        anti_patterns = re.findall(r"(?i)anti[- ]pattern", content)
+        n_anti = len(anti_patterns)
+        a11y = bool(re.search(r"(?i)wcag|a11y|accessibili|contraste|clavier|aria|touch[- ]target|prefers[- ]reduced[- ]motion", content))
+
+        if n_patterns >= 5 and a11y:
+            score, evidence = 10.0, f"{n_patterns} patterns + a11y detailed"
+            status = GateStatus.PASS
+        elif n_patterns >= 3 and n_anti >= 1:
+            score, evidence = 7.5, f"{n_patterns} patterns + {n_anti} anti-patterns"
+            status = GateStatus.PASS
+        elif n_patterns >= 1:
+            score, evidence = 5.0, f"{n_patterns} pattern(s) — coverage thin"
+            status = GateStatus.FAIL
+        else:
+            score, evidence = 2.0, "No P## pattern code detected"
+            status = GateStatus.FAIL
+
+        return GateResult(
+            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+            status=status, score=score, evidence=evidence,
+            duration_ms=0, command="",
+        )
+
+
+@dataclass
+class ContentGapsGate(WebGate):
+    """PE-07: ph0 report identifies content gaps / TBD / kickoff blockers."""
+
+    gate_id: str = "PE-07"
+    name: str = "report-content-gaps"
+    dimension: str = "D6"
+    tool: str = "filesystem"
+
+    def run(self, client_dir: str, site_dir: str) -> GateResult:
+        content = _get_ph0_report(client_dir)
+        if not content:
+            return self._skip_result("ph0-discovery-report.md not present")
+
+        section_present = bool(
+            re.search(r"(?im)^#{1,3}\s*§?\s*5[\.\s]", content)
+            or re.search(r"(?i)content[- ]evaluator|contenu\s+existant|gaps?\s+de\s+contenu", content)
+        )
+
+        # Count blocker indicators: TBD/[bracket placeholder]/bloquante(s)/kickoff
+        blockers = re.findall(
+            r"(?i)\bTBD\b|\[\s*(?:TBD|TODO|INSERT|PLACEHOLDER|XXX|FIXME|"
+            r"ville|adresse|t[ée]l[ée]phone|horaires?|NEQ)\b[^\]]*\]|"
+            r"\b(?:bloquant|bloquante)s?\b|"
+            r"\bvariables?\s+(?:bloquant|[àa]\s+fixer)|"
+            r"\bkickoff\b",
+            content,
+        )
+        n_blockers = len(blockers)
+
+        if not section_present and n_blockers == 0:
+            return GateResult(
+                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+                status=GateStatus.FAIL, score=2.0,
+                evidence="No §5 content section and no blocker markers",
+                duration_ms=0, command="",
+            )
+
+        # Bonus signal: a structured list of variables to fix
+        structured = bool(re.search(
+            r"(?ims)variables?\s+bloquantes?.*?(?:\n[\s\-\*\d]{1,5}.+){3,}", content
+        ))
+
+        if n_blockers >= 5 and structured:
+            score, evidence = 10.0, f"{n_blockers} blocker hits + structured list"
+            status = GateStatus.PASS
+        elif n_blockers >= 3:
+            score, evidence = 7.5, f"{n_blockers} blocker hits"
+            status = GateStatus.PASS
+        elif n_blockers >= 1:
+            score, evidence = 5.0, f"{n_blockers} blocker hit — content gaps thin"
+            status = GateStatus.FAIL
+        else:
+            score, evidence = 3.0, "Section present but no blockers identified"
+            status = GateStatus.FAIL
+
+        return GateResult(
+            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+            status=status, score=score, evidence=evidence,
+            duration_ms=0, command="",
+        )
+
+
+@dataclass
+class PositioningGate(WebGate):
+    """PE-08: ph0 report articulates positioning + actionable recommendations."""
+
+    gate_id: str = "PE-08"
+    name: str = "report-positioning"
+    dimension: str = "D7"
+    tool: str = "filesystem"
+
+    def run(self, client_dir: str, site_dir: str) -> GateResult:
+        content = _get_ph0_report(client_dir)
+        if not content:
+            return self._skip_result("ph0-discovery-report.md not present")
+
+        positioning = bool(re.search(r"(?i)\bpositionnement\b|\bpositioning\b", content))
+        if not positioning:
+            return GateResult(
+                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+                status=GateStatus.FAIL, score=2.0,
+                evidence="No 'positionnement' keyword found",
+                duration_ms=0, command="",
+            )
+
+        # Look for an actionable recommendations block: a "Recommandations"
+        # H1/H2 heading followed by numbered/bulleted action items. We only
+        # break the block on H1/H2 boundaries so that H3 sub-sections inside
+        # the recommendations stay captured.
+        reco_block = re.search(
+            r"(?ims)^#{1,2}\s*[^\n]*recommandations?[^\n]*$(.+?)(?=^#{1,2}\s|\Z)",
+            content,
+        )
+        action_items = 0
+        if reco_block:
+            action_items = len(re.findall(
+                r"(?im)^\s*(?:[-*]|\d+\.)\s+\S",
+                reco_block.group(1),
+            ))
+
+        # SMART/quantitative signal: numbered targets, deadlines, units
+        smart = bool(re.search(
+            r"(?i)\b(?:\d+\s?(?:%|min|sec|s|ms|kb|mb|/\d+)|"
+            r"phase\s+\d+|kpi|score\s*[:=]\s*\d|μ\s*[≥>=]\s*\d)\b",
+            content,
+        ))
+
+        if action_items >= 3 and smart:
+            score, evidence = 10.0, f"positioning + {action_items} action items + SMART signals"
+            status = GateStatus.PASS
+        elif action_items >= 2:
+            score, evidence = 7.5, f"positioning + {action_items} action items"
+            status = GateStatus.PASS
+        elif action_items >= 1:
+            score, evidence = 5.0, "positioning + 1 action item only"
+            status = GateStatus.FAIL
+        else:
+            score, evidence = 4.0, "positioning mentioned but no actionable recommendations block"
+            status = GateStatus.FAIL
+
+        return GateResult(
+            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+            status=status, score=score, evidence=evidence,
+            duration_ms=0, command="",
+        )
+
+
+@dataclass
+class CompetitiveGapsGate(WebGate):
+    """PE-09: ph0 report names competitors and articulates differentiation gaps."""
+
+    gate_id: str = "PE-09"
+    name: str = "report-competitive-gaps"
+    dimension: str = "D9"
+    tool: str = "filesystem"
+
+    def run(self, client_dir: str, site_dir: str) -> GateResult:
+        content = _get_ph0_report(client_dir)
+        if not content:
+            return self._skip_result("ph0-discovery-report.md not present")
+
+        gaps_keyword = bool(re.search(r"(?i)\b(?:gaps?|diff[ée]renciation|[ée]carts?|opportunit[ée]s?)\b", content))
+        if not gaps_keyword:
+            return GateResult(
+                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+                status=GateStatus.FAIL, score=2.0,
+                evidence="No gaps / différenciation / écarts keyword",
+                duration_ms=0, command="",
+            )
+
+        # Count distinct competitors. We accept either "C1..Cn" archetype tags
+        # (the ph0 template convention) or "Concurrent N" mentions.
+        competitor_tags = re.findall(r"\bC[1-9]\b", content)
+        n_tags = len(set(competitor_tags))
+        concurrents = re.findall(r"(?i)\bconcurrent\s*\d+\b", content)
+        n_concurrents = max(n_tags, len(set(concurrents)))
+
+        # Bonus: a forces/faiblesses or gaps matrix table
+        matrix = bool(re.search(
+            r"(?i)\bmatrice\b.*?(?:gaps?|forces?|faiblesses?|diff[ée]renciation)|"
+            r"\|\s*Axe\s*\|.*?\bgap",
+            content,
+        ))
+
+        if n_concurrents >= 5 and matrix:
+            score, evidence = 10.0, f"{n_concurrents} competitors + gaps matrix"
+            status = GateStatus.PASS
+        elif n_concurrents >= 3:
+            score, evidence = 7.5, f"{n_concurrents} competitors + gaps keyword"
+            status = GateStatus.PASS
+        elif n_concurrents >= 1:
+            score, evidence = 5.0, f"{n_concurrents} competitor(s) — benchmark thin"
+            status = GateStatus.FAIL
+        else:
+            score, evidence = 3.0, "gaps keyword but no concrete competitors"
+            status = GateStatus.FAIL
+
+        return GateResult(
+            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
+            status=status, score=score, evidence=evidence,
+            duration_ms=0, command="",
+        )
+
+
 def _load_phase_early_gates() -> list[WebGate]:
     return [
         ReportCompletenessGate(),
         ReportScorePresentGate(),
         ReportSectionsGate(),
         NoPlaceholdersGate(),
+        StackDetectedGate(),
+        UxPatternsGate(),
+        ContentGapsGate(),
+        PositioningGate(),
+        CompetitiveGapsGate(),
     ]
 
 
