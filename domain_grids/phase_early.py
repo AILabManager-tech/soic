@@ -4,11 +4,16 @@ These gates evaluate the phase report (no site exists yet).
 
 Gate inventory:
 - PE-01..PE-04: generic report-quality gates (D1, D2). Run for any phase.
-- PE-05..PE-09: ph0-discovery specific gates (D3, D5, D6, D7, D9). Read
+- PE-05..PE-09: ph0-discovery specific gates (D2, D3, D6, D7, D9). Read
   ``ph0-discovery-report.md`` directly; SKIP if absent. Together with
   PE-01..PE-04 they expand the dimensional coverage of ph0 from D1+D2 to
-  seven dimensions, fixing the historical structural plateau where partial
-  coverage capped μ at ~6.11 (cf. BUG_SOIC_PH0_GATES_INCOMPLETS.md).
+  six dimensions (D1, D2, D3, D6, D7, D9), fixing the historical
+  structural plateau where partial coverage capped μ at ~6.11
+  (cf. BUG_SOIC_PH0_GATES_INCOMPLETS.md). The original SESSION_02 mapping
+  used D5 (Performance) for UX patterns and D6 (Accessibilité) for content
+  gaps — semantically incorrect; SESSION_04.5 of chantier mode B remapped
+  PE-06 D5→D6 and PE-07 D6→D2 so the dimension labels match the gate
+  subjects (cf. phase-04.5-report.md).
 """
 
 from __future__ import annotations
@@ -288,11 +293,18 @@ class StackDetectedGate(WebGate):
 
 @dataclass
 class UxPatternsGate(WebGate):
-    """PE-06: ph0 report lists UX patterns + anti-patterns + a11y."""
+    """PE-06: ph0 report lists UX patterns + anti-patterns + a11y.
+
+    Dimension mapping: D6 Accessibilité — UX patterns analysis explicitly
+    covers a11y (WCAG, contrast, keyboard, ARIA, prefers-reduced-motion),
+    so the gate naturally fits the Accessibilité dimension. Was D5
+    (Performance) prior to SESSION_04.5 of chantier mode B — corrected as
+    a semantic mismatch (cf. phase-04.5-report.md).
+    """
 
     gate_id: str = "PE-06"
     name: str = "report-ux-patterns"
-    dimension: str = "D5"
+    dimension: str = "D6"
     tool: str = "filesystem"
 
     def run(self, client_dir: str, site_dir: str) -> GateResult:
@@ -340,11 +352,18 @@ class UxPatternsGate(WebGate):
 
 @dataclass
 class ContentGapsGate(WebGate):
-    """PE-07: ph0 report identifies content gaps / TBD / kickoff blockers."""
+    """PE-07: ph0 report identifies content gaps / TBD / kickoff blockers.
+
+    Dimension mapping: D2 Documentation — variables bloquantes, TBD markers
+    and kickoff blockers are documentation artefacts of the discovery
+    output (what is known vs what must still be collected from the
+    client). Was D6 (Accessibilité) prior to SESSION_04.5 of chantier
+    mode B — corrected as a semantic mismatch (cf. phase-04.5-report.md).
+    """
 
     gate_id: str = "PE-07"
     name: str = "report-content-gaps"
-    dimension: str = "D6"
+    dimension: str = "D2"
     tool: str = "filesystem"
 
     def run(self, client_dir: str, site_dir: str) -> GateResult:
@@ -468,7 +487,15 @@ class PositioningGate(WebGate):
 
 @dataclass
 class CompetitiveGapsGate(WebGate):
-    """PE-09: ph0 report names competitors and articulates differentiation gaps."""
+    """PE-09: ph0 report names competitors and articulates differentiation gaps.
+
+    Dimension mapping (extended): D9 Code Quality is used in ph0-discovery
+    as a proxy for "qualité distinctive du livrable". The competitive-gaps
+    analysis is a signal of qualitative differentiation of the diagnostic,
+    by analogy with code quality in later phases (D9 measures distinctness
+    and rigor). Documented and accepted as a stretched mapping in
+    SESSION_04.5 of chantier mode B (cf. phase-04.5-report.md).
+    """
 
     gate_id: str = "PE-09"
     name: str = "report-competitive-gaps"

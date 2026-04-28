@@ -49,6 +49,9 @@ DIMENSIONS = {
         "name": "Code Quality",
         "description": "TypeScript strict, linting, conventions, DRY",
         "weight": 0.9,
+        # NOTE: en ph0-discovery, D9 accepte des proxies de "qualité
+        # distinctive" (ex: PE-09 competitive-gaps). Voir phase_early.py
+        # CompetitiveGapsGate docstring + chantier mode B SESSION_04.5.
     },
 }
 
