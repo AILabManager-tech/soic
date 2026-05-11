@@ -23,6 +23,7 @@ from ..models import GateResult, GateStatus
 # PART 1: OSIRIS axis gates (domain-based, 4 gates)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class OsirisAxisGate:
     """Base for WEB domain gates that wrap OSIRIS axis scans."""
@@ -52,9 +53,12 @@ class OsirisAxisGate:
                 from axes.resource import scan
             else:
                 return GateResult(
-                    gate_id=self.gate_id, name=self.name, status=GateStatus.ERROR,
+                    gate_id=self.gate_id,
+                    name=self.name,
+                    status=GateStatus.ERROR,
                     evidence=f"Unknown axis module: {self.axis_module}",
-                    duration_ms=0, command="",
+                    duration_ms=0,
+                    command="",
                 )
 
             result = asyncio.run(scan(url))
@@ -75,8 +79,11 @@ class OsirisAxisGate:
         except Exception as e:
             duration_ms = int((time.monotonic() - start) * 1000)
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.ERROR,
-                evidence=str(e)[:200], duration_ms=duration_ms,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.ERROR,
+                evidence=str(e)[:200],
+                duration_ms=duration_ms,
                 command=f"osiris.axes.{self.axis_module}.scan({url})",
             )
 
@@ -87,7 +94,10 @@ def _load_web_gates() -> list:
         OsirisAxisGate(gate_id="W-01", name="performance", axis_module="performance"),
         OsirisAxisGate(gate_id="W-02", name="security", axis_module="security"),
         OsirisAxisGate(
-            gate_id="W-03", name="intrusion", axis_module="intrusion", pass_threshold=8.0,
+            gate_id="W-03",
+            name="intrusion",
+            axis_module="intrusion",
+            pass_threshold=8.0,
         ),
         OsirisAxisGate(gate_id="W-04", name="resource", axis_module="resource"),
     ]
@@ -104,6 +114,7 @@ register_domain("WEB", _load_web_gates)
 
 
 # -- NW-01 nextjs-structure (D1) ----------------------------------------------
+
 
 @dataclass
 class NextJSStructureGate(WebGate):
@@ -144,19 +155,24 @@ class NextJSStructureGate(WebGate):
 
         score = (found / total) * 10.0
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
-        evidence = (
-            f"{found}/{total} structure elements"
-            + (f" (missing: {', '.join(missing)})" if missing else "")
+        evidence = f"{found}/{total} structure elements" + (
+            f" (missing: {', '.join(missing)})" if missing else ""
         )
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="ls",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="ls",
         )
 
 
 # -- NW-02 documentation (D2) -------------------------------------------------
+
 
 @dataclass
 class DocumentationGate(WebGate):
@@ -197,9 +213,14 @@ class DocumentationGate(WebGate):
         evidence = "; ".join(issues) if issues else f"Documentation OK ({score:.1f})"
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
@@ -212,6 +233,7 @@ def _file_has_docs(f: Path) -> bool:
 
 
 # -- NW-03 vitest (D3) --------------------------------------------------------
+
 
 @dataclass
 class VitestGate(WebGate):
@@ -260,13 +282,19 @@ class VitestGate(WebGate):
 
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=duration_ms, command=" ".join(cmd),
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=duration_ms,
+            command=" ".join(cmd),
         )
 
 
 # -- NW-04 test-coverage (D3) -------------------------------------------------
+
 
 @dataclass
 class TestCoverageGate(WebGate):
@@ -302,26 +330,34 @@ class TestCoverageGate(WebGate):
             cov = data.get("coverageMap", {})
             if cov:
                 total_stmts = sum(len(v.get("s", {})) for v in cov.values())
-                covered = sum(sum(1 for c in v.get("s", {}).values() if c > 0) for v in cov.values())
+                covered = sum(
+                    sum(1 for c in v.get("s", {}).values() if c > 0) for v in cov.values()
+                )
                 pct = (covered / total_stmts * 100) if total_stmts > 0 else 0
             else:
                 pct = 0
         except (json.JSONDecodeError, KeyError):
             output = proc.stdout + proc.stderr
-            match = re.search(r'All files\s*\|\s*([\d.]+)', output)
+            match = re.search(r"All files\s*\|\s*([\d.]+)", output)
             pct = float(match.group(1)) if match else 0
 
         score = min(10.0, pct / 8.0)
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=f"Coverage: {pct:.1f}%",
-            duration_ms=duration_ms, command=" ".join(cmd),
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=f"Coverage: {pct:.1f}%",
+            duration_ms=duration_ms,
+            command=" ".join(cmd),
         )
 
 
 # -- NW-05 npm-audit (D4) -----------------------------------------------------
+
 
 @dataclass
 class NpmAuditGate(WebGate):
@@ -342,9 +378,14 @@ class NpmAuditGate(WebGate):
             status = GateStatus.PASS if high == 0 else GateStatus.FAIL
             evidence = f"{high} HIGH/CRITICAL vulns" if high > 0 else "0 HIGH/CRITICAL"
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=status, score=score, evidence=evidence,
-                duration_ms=0, command="npm audit (tooling/)",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=status,
+                score=score,
+                evidence=evidence,
+                duration_ms=0,
+                command="npm audit (tooling/)",
             )
 
         sd = Path(site_dir)
@@ -368,13 +409,19 @@ class NpmAuditGate(WebGate):
         status = GateStatus.PASS if high == 0 else GateStatus.FAIL
         evidence = f"{high} HIGH/CRITICAL vulns" if high > 0 else "0 HIGH/CRITICAL"
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=duration_ms, command=" ".join(cmd),
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=duration_ms,
+            command=" ".join(cmd),
         )
 
 
 # -- NW-06 security-headers (D4) ----------------------------------------------
+
 
 @dataclass
 class SecurityHeadersGate(WebGate):
@@ -386,8 +433,12 @@ class SecurityHeadersGate(WebGate):
     tool: str = "filesystem"
 
     REQUIRED_HEADERS = [
-        "x-content-type-options", "x-frame-options", "referrer-policy",
-        "permissions-policy", "strict-transport-security", "content-security-policy",
+        "x-content-type-options",
+        "x-frame-options",
+        "referrer-policy",
+        "permissions-policy",
+        "strict-transport-security",
+        "content-security-policy",
     ]
 
     def run(self, client_dir: str, site_dir: str) -> GateResult:
@@ -395,9 +446,14 @@ class SecurityHeadersGate(WebGate):
         vercel_json = sd / "vercel.json"
         if not vercel_json.exists():
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=2.0,
-                evidence="No vercel.json", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=2.0,
+                evidence="No vercel.json",
+                duration_ms=0,
+                command="",
             )
 
         try:
@@ -409,16 +465,24 @@ class SecurityHeadersGate(WebGate):
         missing = [h for h in self.REQUIRED_HEADERS if h not in content]
         score = (len(found) / len(self.REQUIRED_HEADERS)) * 10.0
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
-        evidence = f"{len(found)}/{len(self.REQUIRED_HEADERS)} headers" + (f" (missing: {', '.join(missing)})" if missing else "")
+        evidence = f"{len(found)}/{len(self.REQUIRED_HEADERS)} headers" + (
+            f" (missing: {', '.join(missing)})" if missing else ""
+        )
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
 # -- NW-07 secret-scan (D4) ---------------------------------------------------
+
 
 @dataclass
 class SecretScanGate(WebGate):
@@ -430,8 +494,12 @@ class SecretScanGate(WebGate):
     tool: str = "grep"
 
     _PATTERNS = [
-        r"NEXT_PUBLIC.*KEY", r"NEXT_PUBLIC.*SECRET", r"NEXT_PUBLIC.*TOKEN",
-        r"sk[-_]live", r"sk[-_]test", r"AKIA[0-9A-Z]{16}",
+        r"NEXT_PUBLIC.*KEY",
+        r"NEXT_PUBLIC.*SECRET",
+        r"NEXT_PUBLIC.*TOKEN",
+        r"sk[-_]live",
+        r"sk[-_]test",
+        r"AKIA[0-9A-Z]{16}",
     ]
 
     def run(self, client_dir: str, site_dir: str) -> GateResult:
@@ -442,10 +510,21 @@ class SecretScanGate(WebGate):
         for pattern in self._PATTERNS:
             try:
                 proc = subprocess.run(
-                    ["grep", "-rl", "-E", pattern, str(src),
-                     "--include=*.ts", "--include=*.tsx", "--include=*.js",
-                     "--exclude-dir=node_modules", "--exclude-dir=.next"],
-                    capture_output=True, text=True, timeout=10,
+                    [
+                        "grep",
+                        "-rl",
+                        "-E",
+                        pattern,
+                        str(src),
+                        "--include=*.ts",
+                        "--include=*.tsx",
+                        "--include=*.js",
+                        "--exclude-dir=node_modules",
+                        "--exclude-dir=.next",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
                 )
                 if proc.stdout.strip():
                     findings.extend(proc.stdout.strip().splitlines())
@@ -455,21 +534,31 @@ class SecretScanGate(WebGate):
         unique_files = list(set(findings))
         if not unique_files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.PASS, score=10.0,
-                evidence="No secrets detected", duration_ms=0, command="grep",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.PASS,
+                score=10.0,
+                evidence="No secrets detected",
+                duration_ms=0,
+                command="grep",
             )
 
         score = max(0.0, 10.0 - len(unique_files) * 3.0)
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=GateStatus.FAIL, score=score,
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=GateStatus.FAIL,
+            score=score,
             evidence=f"{len(unique_files)} file(s) with secrets: {', '.join(Path(f).name for f in unique_files[:5])}",
-            duration_ms=0, command="grep",
+            duration_ms=0,
+            command="grep",
         )
 
 
 # -- NW-08 lighthouse-perf (D5) -----------------------------------------------
+
 
 @dataclass
 class LighthousePerfGate(WebGate):
@@ -494,13 +583,19 @@ class LighthousePerfGate(WebGate):
 
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=f"Lighthouse perf: {perf:.0%} ({score:.1f}/10)",
-            duration_ms=0, command="lighthouse (tooling/)",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=f"Lighthouse perf: {perf:.0%} ({score:.1f}/10)",
+            duration_ms=0,
+            command="lighthouse (tooling/)",
         )
 
 
 # -- NW-09 bundle-size (D5) ---------------------------------------------------
+
 
 @dataclass
 class BundleSizeGate(WebGate):
@@ -514,7 +609,10 @@ class BundleSizeGate(WebGate):
 
     def run(self, client_dir: str, site_dir: str) -> GateResult:
         sd = Path(site_dir)
-        chunks_dirs = [sd / ".next" / "static" / "chunks", sd / "out" / "_next" / "static" / "chunks"]
+        chunks_dirs = [
+            sd / ".next" / "static" / "chunks",
+            sd / "out" / "_next" / "static" / "chunks",
+        ]
         js_files = []
         for d in chunks_dirs:
             if d.exists():
@@ -523,25 +621,38 @@ class BundleSizeGate(WebGate):
         if not js_files:
             return self._skip_result("No built chunks found")
 
-        oversized = [f"{f.name} ({f.stat().st_size // 1024}KB)" for f in js_files if f.stat().st_size / 1024 > self.MAX_CHUNK_KB]
+        oversized = [
+            f"{f.name} ({f.stat().st_size // 1024}KB)"
+            for f in js_files
+            if f.stat().st_size / 1024 > self.MAX_CHUNK_KB
+        ]
         if not oversized:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.PASS, score=10.0,
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.PASS,
+                score=10.0,
                 evidence=f"All {len(js_files)} chunks < {self.MAX_CHUNK_KB}KB",
-                duration_ms=0, command="",
+                duration_ms=0,
+                command="",
             )
 
         score = max(0.0, 10.0 - len(oversized) * 2.0)
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=GateStatus.FAIL, score=score,
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=GateStatus.FAIL,
+            score=score,
             evidence=f"{len(oversized)} oversized: {', '.join(oversized[:3])}",
-            duration_ms=0, command="",
+            duration_ms=0,
+            command="",
         )
 
 
 # -- NW-10 pa11y-a11y (D6) ----------------------------------------------------
+
 
 @dataclass
 class Pa11yGate(WebGate):
@@ -568,14 +679,19 @@ class Pa11yGate(WebGate):
         score = max(0.0, 10.0 - errors * 0.5)
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score,
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
             evidence=f"{errors} WCAG error(s)" if errors > 0 else "No WCAG errors",
-            duration_ms=0, command="pa11y (tooling/)",
+            duration_ms=0,
+            command="pa11y (tooling/)",
         )
 
 
 # -- NW-11 lighthouse-a11y (D6) -----------------------------------------------
+
 
 @dataclass
 class LighthouseA11yGate(WebGate):
@@ -600,13 +716,19 @@ class LighthouseA11yGate(WebGate):
 
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=f"Lighthouse a11y: {a11y:.0%} ({score:.1f}/10)",
-            duration_ms=0, command="lighthouse (tooling/)",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=f"Lighthouse a11y: {a11y:.0%} ({score:.1f}/10)",
+            duration_ms=0,
+            command="lighthouse (tooling/)",
         )
 
 
 # -- NW-12 lighthouse-seo (D7) ------------------------------------------------
+
 
 @dataclass
 class LighthouseSeoGate(WebGate):
@@ -631,13 +753,19 @@ class LighthouseSeoGate(WebGate):
 
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=f"Lighthouse SEO: {seo:.0%} ({score:.1f}/10)",
-            duration_ms=0, command="lighthouse (tooling/)",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=f"Lighthouse SEO: {seo:.0%} ({score:.1f}/10)",
+            duration_ms=0,
+            command="lighthouse (tooling/)",
         )
 
 
 # -- NW-13 seo-meta (D7) ------------------------------------------------------
+
 
 @dataclass
 class SeoMetaGate(WebGate):
@@ -655,7 +783,11 @@ class SeoMetaGate(WebGate):
         issues = []
 
         src = sd / "src" if (sd / "src").exists() else sd
-        layout_files = [f for f in list(src.rglob("layout.tsx")) + list(src.rglob("layout.ts")) if "node_modules" not in str(f)]
+        layout_files = [
+            f
+            for f in list(src.rglob("layout.tsx")) + list(src.rglob("layout.ts"))
+            if "node_modules" not in str(f)
+        ]
 
         if layout_files:
             try:
@@ -668,7 +800,11 @@ class SeoMetaGate(WebGate):
                     found += 1
                 else:
                     issues.append("No description")
-                if "opengraph" in content.lower() or "og:" in content.lower() or "openGraph" in content:
+                if (
+                    "opengraph" in content.lower()
+                    or "og:" in content.lower()
+                    or "openGraph" in content
+                ):
                     found += 1
                 else:
                     issues.append("No openGraph")
@@ -692,13 +828,19 @@ class SeoMetaGate(WebGate):
         evidence = f"{found}/{checks} SEO" + (f" (missing: {', '.join(issues)})" if issues else "")
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
 # -- NW-14 legal-compliance (D8) ----------------------------------------------
+
 
 @dataclass
 class LegalComplianceGate(WebGate):
@@ -711,10 +853,16 @@ class LegalComplianceGate(WebGate):
 
     _REQUIRED_KEYWORDS = [
         ("responsable.*protection|RPRP|privacy.*officer", "RPP/Responsable protection"),
-        ("renseignements personnels|donn[eé]es personnelles|personal.*information", "Donnees personnelles"),
+        (
+            "renseignements personnels|donn[eé]es personnelles|personal.*information",
+            "Donnees personnelles",
+        ),
         ("finalit[eé]|fins de|purpose", "Finalite de collecte"),
         ("dur[eé]e de conservation|p[eé]riode de conservation|retention", "Duree de conservation"),
-        ("droit.{0,3}acc[eè]s.*rectification|acc[eè]s.*suppression|access.*rectification|droits.*rectification", "Droits (acces/rectification/suppression)"),
+        (
+            "droit.{0,3}acc[eè]s.*rectification|acc[eè]s.*suppression|access.*rectification|droits.*rectification",
+            "Droits (acces/rectification/suppression)",
+        ),
         ("plainte|recours|complaint", "Mecanisme de plainte"),
     ]
 
@@ -744,8 +892,14 @@ class LegalComplianceGate(WebGate):
                     break
             except OSError:
                 pass
-        checks.append(("Lien footer confidentialite",
-                        "PASS -- lien dans footer" if has_footer_link else "FAIL -- pas de lien dans footer"))
+        checks.append(
+            (
+                "Lien footer confidentialite",
+                "PASS -- lien dans footer"
+                if has_footer_link
+                else "FAIL -- pas de lien dans footer",
+            )
+        )
 
         # CHECK 3: Required keywords in privacy policy content
         policy_content = ""
@@ -764,19 +918,31 @@ class LegalComplianceGate(WebGate):
                 kw_missing.append(label)
 
         if kw_found == len(self._REQUIRED_KEYWORDS):
-            checks.append(("Mots-cles obligatoires", f"PASS -- {kw_found}/{len(self._REQUIRED_KEYWORDS)}"))
+            checks.append(
+                ("Mots-cles obligatoires", f"PASS -- {kw_found}/{len(self._REQUIRED_KEYWORDS)}")
+            )
         else:
-            checks.append(("Mots-cles obligatoires",
-                           f"FAIL -- {kw_found}/{len(self._REQUIRED_KEYWORDS)} (manquants: {', '.join(kw_missing)})"))
+            checks.append(
+                (
+                    "Mots-cles obligatoires",
+                    f"FAIL -- {kw_found}/{len(self._REQUIRED_KEYWORDS)} (manquants: {', '.join(kw_missing)})",
+                )
+            )
 
         # CHECK 4: Forms have unchecked consent checkbox
-        form_files = _grep_files(src_dir, r"<form|onSubmit|handleSubmit", ["*.tsx", "*.ts", "*.jsx"])
+        form_files = _grep_files(
+            src_dir, r"<form|onSubmit|handleSubmit", ["*.tsx", "*.ts", "*.jsx"]
+        )
         consent_ok = True
         consent_detail = "PASS -- pas de formulaire ou checkbox non pre-cochee"
         for f in form_files:
             try:
                 content = Path(f).read_text(encoding="utf-8", errors="replace")
-                if "defaultChecked" in content or "checked={true}" in content or 'checked="true"' in content:
+                if (
+                    "defaultChecked" in content
+                    or "checked={true}" in content
+                    or 'checked="true"' in content
+                ):
                     consent_ok = False
                     consent_detail = f"FAIL -- checkbox pre-cochee dans {Path(f).name}"
                     break
@@ -789,14 +955,25 @@ class LegalComplianceGate(WebGate):
         for f in form_files:
             try:
                 content = Path(f).read_text(encoding="utf-8", errors="replace").lower()
-                if ("finalit" in content or "purpose" in content or "fins de" in content
-                        or "nous utilisons" in content or "vos renseignements" in content):
+                if (
+                    "finalit" in content
+                    or "purpose" in content
+                    or "fins de" in content
+                    or "nous utilisons" in content
+                    or "vos renseignements" in content
+                ):
                     purpose_near_form = True
                     break
             except OSError:
                 pass
-        checks.append(("Mention finalite pres du formulaire",
-                        "PASS -- mention trouvee" if purpose_near_form or not form_files else "FAIL -- aucune mention de finalite"))
+        checks.append(
+            (
+                "Mention finalite pres du formulaire",
+                "PASS -- mention trouvee"
+                if purpose_near_form or not form_files
+                else "FAIL -- aucune mention de finalite",
+            )
+        )
 
         # CHECK 6: Privacy link near forms
         privacy_link_near = False
@@ -808,20 +985,33 @@ class LegalComplianceGate(WebGate):
                     break
             except OSError:
                 pass
-        checks.append(("Lien confidentialite pres du formulaire",
-                        "PASS -- lien present" if privacy_link_near or not form_files else "FAIL -- pas de lien confidentialite"))
+        checks.append(
+            (
+                "Lien confidentialite pres du formulaire",
+                "PASS -- lien present"
+                if privacy_link_near or not form_files
+                else "FAIL -- pas de lien confidentialite",
+            )
+        )
 
         passed_count = sum(1 for _, detail in checks if detail.startswith("PASS"))
         score = (passed_count / len(checks)) * 10.0
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
 
-        evidence_lines = [f"CHECK {i+1} ({name}): {detail}" for i, (name, detail) in enumerate(checks)]
+        evidence_lines = [
+            f"CHECK {i + 1} ({name}): {detail}" for i, (name, detail) in enumerate(checks)
+        ]
         evidence = " | ".join(evidence_lines)
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
@@ -863,6 +1053,7 @@ def _grep_files(base: Path, pattern: str, extensions: list[str]) -> list[str]:
 
 # -- NW-15 eslint (D9) --------------------------------------------------------
 
+
 @dataclass
 class EslintGate(WebGate):
     """W-15: ESLint errors."""
@@ -897,20 +1088,28 @@ class EslintGate(WebGate):
             error_count = sum(r.get("errorCount", 0) for r in results)
             warning_count = sum(r.get("warningCount", 0) for r in results)
         except (json.JSONDecodeError, TypeError):
-            error_count = (proc.stdout + proc.stderr).lower().count("error") if proc.returncode != 0 else 0
+            error_count = (
+                (proc.stdout + proc.stderr).lower().count("error") if proc.returncode != 0 else 0
+            )
             warning_count = 0
 
         score = max(0.0, 10.0 - error_count * 0.5 - warning_count * 0.1)
         status = GateStatus.PASS if error_count == 0 else GateStatus.FAIL
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=f"{error_count} error(s), {warning_count} warning(s)",
-            duration_ms=duration_ms, command=" ".join(cmd),
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=f"{error_count} error(s), {warning_count} warning(s)",
+            duration_ms=duration_ms,
+            command=" ".join(cmd),
         )
 
 
 # -- NW-16 typescript-strict (D9) ---------------------------------------------
+
 
 @dataclass
 class TypescriptStrictGate(WebGate):
@@ -937,7 +1136,7 @@ class TypescriptStrictGate(WebGate):
                 c = content[i]
                 if in_string:
                     result_chars.append(c)
-                    if c == '\\' and i + 1 < len(content):
+                    if c == "\\" and i + 1 < len(content):
                         i += 1
                         result_chars.append(content[i])
                     elif c == '"':
@@ -945,20 +1144,22 @@ class TypescriptStrictGate(WebGate):
                 elif c == '"':
                     in_string = True
                     result_chars.append(c)
-                elif c == '/' and i + 1 < len(content) and content[i + 1] == '/':
-                    while i < len(content) and content[i] != '\n':
+                elif c == "/" and i + 1 < len(content) and content[i + 1] == "/":
+                    while i < len(content) and content[i] != "\n":
                         i += 1
                     continue
-                elif c == '/' and i + 1 < len(content) and content[i + 1] == '*':
+                elif c == "/" and i + 1 < len(content) and content[i + 1] == "*":
                     i += 2
-                    while i + 1 < len(content) and not (content[i] == '*' and content[i + 1] == '/'):
+                    while i + 1 < len(content) and not (
+                        content[i] == "*" and content[i + 1] == "/"
+                    ):
                         i += 1
                     i += 2
                     continue
                 else:
                     result_chars.append(c)
                 i += 1
-            ts_data = json.loads(''.join(result_chars))
+            ts_data = json.loads("".join(result_chars))
         except (json.JSONDecodeError, OSError, IndexError):
             return self._error_result("", "Cannot parse tsconfig.json", 0)
 
@@ -978,12 +1179,17 @@ class TypescriptStrictGate(WebGate):
             issues.append("noUncheckedIndexedAccess missing")
 
         src = sd / "src" if (sd / "src").exists() else sd
-        ts_files = [f for f in list(src.rglob("*.ts")) + list(src.rglob("*.tsx"))
-                     if "node_modules" not in str(f) and ".next" not in str(f)]
+        ts_files = [
+            f
+            for f in list(src.rglob("*.ts")) + list(src.rglob("*.tsx"))
+            if "node_modules" not in str(f) and ".next" not in str(f)
+        ]
         any_count = 0
         for f in ts_files[:50]:
             try:
-                any_count += len(re.findall(r'\bany\b', f.read_text(encoding="utf-8", errors="replace")))
+                any_count += len(
+                    re.findall(r"\bany\b", f.read_text(encoding="utf-8", errors="replace"))
+                )
             except OSError:
                 pass
 
@@ -996,22 +1202,32 @@ class TypescriptStrictGate(WebGate):
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score,
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
             evidence="; ".join(issues) if issues else "TypeScript strict OK",
-            duration_ms=0, command="",
+            duration_ms=0,
+            command="",
         )
 
 
 # -- NW-17 cookie-consent (D8) ------------------------------------------------
 
 TRACKER_DOMAINS = [
-    'google-analytics.com', 'googletagmanager.com',
-    'facebook.net', 'facebook.com/tr',
-    'hotjar.com', 'clarity.ms',
-    'doubleclick.net', 'googlesyndication.com',
-    'linkedin.com/px', 'twitter.com/i/adsct',
-    'tiktok.com/i/pixel', 'snap.licdn.com',
+    "google-analytics.com",
+    "googletagmanager.com",
+    "facebook.net",
+    "facebook.com/tr",
+    "hotjar.com",
+    "clarity.ms",
+    "doubleclick.net",
+    "googlesyndication.com",
+    "linkedin.com/px",
+    "twitter.com/i/adsct",
+    "tiktok.com/i/pixel",
+    "snap.licdn.com",
 ]
 
 
@@ -1039,7 +1255,9 @@ class CookieConsentGate(WebGate):
         passed = 0
 
         # CHECK 1: Cookie consent component exists
-        consent_files = _find_files(sd, ["*cookie*consent*", "*CookieConsent*", "*cookie*banner*", "*CookieBanner*"])
+        consent_files = _find_files(
+            sd, ["*cookie*consent*", "*CookieConsent*", "*cookie*banner*", "*CookieBanner*"]
+        )
         if consent_files:
             passed += 1
         else:
@@ -1047,8 +1265,11 @@ class CookieConsentGate(WebGate):
 
         # CHECK 2: Tracker scripts are conditionally loaded
         all_source = ""
-        tsx_files = [f for f in list(src.rglob("*.tsx")) + list(src.rglob("*.ts"))
-                     if "node_modules" not in str(f) and ".next" not in str(f)]
+        tsx_files = [
+            f
+            for f in list(src.rglob("*.tsx")) + list(src.rglob("*.ts"))
+            if "node_modules" not in str(f) and ".next" not in str(f)
+        ]
         for f in tsx_files[:30]:
             try:
                 all_source += Path(f).read_text(encoding="utf-8", errors="replace")
@@ -1068,11 +1289,16 @@ class CookieConsentGate(WebGate):
             if wrapped:
                 passed += 1
             else:
-                issues.append(f"Tracker scripts ({', '.join(tracker_refs[:3])}) not wrapped in consent check")
+                issues.append(
+                    f"Tracker scripts ({', '.join(tracker_refs[:3])}) not wrapped in consent check"
+                )
 
         # CHECK 3: No pre-loaded analytics in <head> / layout
-        layout_files = [f for f in list(src.rglob("layout.tsx")) + list(src.rglob("layout.ts"))
-                        if "node_modules" not in str(f)]
+        layout_files = [
+            f
+            for f in list(src.rglob("layout.tsx")) + list(src.rglob("layout.ts"))
+            if "node_modules" not in str(f)
+        ]
         head_tracker = False
         for f in layout_files:
             try:
@@ -1098,7 +1324,9 @@ class CookieConsentGate(WebGate):
                 pass
 
         if consent_content:
-            has_reject = any(kw in consent_content.lower() for kw in ["refuser", "reject", "decline", "deny"])
+            has_reject = any(
+                kw in consent_content.lower() for kw in ["refuser", "reject", "decline", "deny"]
+            )
             if has_reject:
                 passed += 1
             else:
@@ -1112,35 +1340,117 @@ class CookieConsentGate(WebGate):
         raw_score = (passed / checks) * 10.0
         score = min(7.0, raw_score) if raw_score > 0 else 0.0
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
-        evidence = f"{passed}/{checks} checks" + (f" (issues: {'; '.join(issues)})" if issues else " -- static analysis only (max 7.0)")
+        evidence = f"{passed}/{checks} checks" + (
+            f" (issues: {'; '.join(issues)})" if issues else " -- static analysis only (max 7.0)"
+        )
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="static analysis",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="static analysis",
+        )
+
+
+# -- NW-18 cumulative-layout-shift (D5) ---------------------------------------
+
+
+@dataclass
+class CumulativeLayoutShiftGate(WebGate):
+    """W-18: Cumulative Layout Shift (CLS) — Item 1 chantier 4 dette pipeline.
+
+    L'audit knowledge 2026-05-08 a montré que Ph4 voyait `BUILD PASS` alors
+    que Ph5 mesurait CLS=0.502 (cause : CookieConsent + StickyMobileCta
+    post-hydration). Sans cette gate dédiée, le SaaS commercialiserait des
+    sites avec CLS catastrophique malgré un μ Ph5 honnête sur les autres
+    dimensions.
+
+    Seuils Google web-vitals :
+    - Good           : CLS ≤ 0.1  → score 10.0 PASS
+    - Needs Improv.  : 0.1 < CLS ≤ 0.25 → score 7.0-9.0 PASS dégradé
+    - Poor           : CLS > 0.25 → score < 7.0 FAIL
+    """
+
+    gate_id: str = "W-18"
+    name: str = "cumulative-layout-shift"
+    dimension: str = "D5"
+    tool: str = "lighthouse"
+
+    def run(self, client_dir: str, site_dir: str) -> GateResult:
+        tooling_dir = Path(client_dir) / "tooling"
+        lh = self._read_tooling_json(tooling_dir, "lighthouse.json")
+        if lh is None:
+            return self._not_executed_result("No lighthouse.json -- run preflight first")
+
+        try:
+            audits = lh.get("audits", {})
+            cls_audit = audits.get("cumulative-layout-shift", {})
+            cls_value = cls_audit.get("numericValue")
+            if cls_value is None:
+                return self._error_result(
+                    "", "lighthouse.json sans audits.cumulative-layout-shift", 0
+                )
+            cls_value = float(cls_value)
+        except (AttributeError, TypeError, ValueError):
+            return self._error_result("", "Invalid lighthouse.json format", 0)
+
+        # Score linéaire par paliers web-vitals
+        if cls_value <= 0.1:
+            score = 10.0
+            status = GateStatus.PASS
+            verdict = "Good"
+        elif cls_value <= 0.25:
+            # Interpolation linéaire entre 7.0 (à CLS=0.25) et 10.0 (à CLS=0.1)
+            score = 10.0 - 3.0 * (cls_value - 0.1) / 0.15
+            status = GateStatus.PASS
+            verdict = "Needs Improvement"
+        elif cls_value <= 0.5:
+            # Linéaire entre 7.0 (à 0.25) et 3.0 (à 0.5)
+            score = 7.0 - 4.0 * (cls_value - 0.25) / 0.25
+            status = GateStatus.FAIL
+            verdict = "Poor"
+        else:
+            score = 0.0
+            status = GateStatus.FAIL
+            verdict = "Critical"
+
+        return GateResult(
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=round(score, 2),
+            evidence=f"CLS={cls_value:.3f} ({verdict})",
+            duration_ms=0,
+            command="lighthouse (tooling/)",
         )
 
 
 # ── NEXOS gate set loaders ───────────────────────────────────────────────────
 
 _ALL_WEB_GATES = [
-    NextJSStructureGate,    # W-01 D1
-    DocumentationGate,      # W-02 D2
-    VitestGate,             # W-03 D3
-    TestCoverageGate,       # W-04 D3
-    NpmAuditGate,           # W-05 D4
-    SecurityHeadersGate,    # W-06 D4
-    SecretScanGate,         # W-07 D4
-    LighthousePerfGate,     # W-08 D5
-    BundleSizeGate,         # W-09 D5
-    Pa11yGate,              # W-10 D6
-    LighthouseA11yGate,     # W-11 D6
-    LighthouseSeoGate,      # W-12 D7
-    SeoMetaGate,            # W-13 D7
-    LegalComplianceGate,    # W-14 D8
-    EslintGate,             # W-15 D9
-    TypescriptStrictGate,   # W-16 D9
-    CookieConsentGate,      # W-17 D8
+    NextJSStructureGate,  # W-01 D1
+    DocumentationGate,  # W-02 D2
+    VitestGate,  # W-03 D3
+    TestCoverageGate,  # W-04 D3
+    NpmAuditGate,  # W-05 D4
+    SecurityHeadersGate,  # W-06 D4
+    SecretScanGate,  # W-07 D4
+    LighthousePerfGate,  # W-08 D5
+    BundleSizeGate,  # W-09 D5
+    Pa11yGate,  # W-10 D6
+    LighthouseA11yGate,  # W-11 D6
+    LighthouseSeoGate,  # W-12 D7
+    SeoMetaGate,  # W-13 D7
+    LegalComplianceGate,  # W-14 D8
+    EslintGate,  # W-15 D9
+    TypescriptStrictGate,  # W-16 D9
+    CookieConsentGate,  # W-17 D8
+    CumulativeLayoutShiftGate,  # W-18 D5 (Item 1 chantier 4)
 ]
 
 _BUILD_GATE_IDS = {"W-01", "W-05", "W-06", "W-07", "W-14", "W-15", "W-16"}

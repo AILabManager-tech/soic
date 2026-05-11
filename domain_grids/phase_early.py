@@ -93,9 +93,14 @@ class ReportCompletenessGate(WebGate):
         content = _get_report_content(client_dir)
         if not content:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=0.0,
-                evidence="No report found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=0.0,
+                evidence="No report found",
+                duration_ms=0,
+                command="",
             )
 
         issues = []
@@ -114,12 +119,21 @@ class ReportCompletenessGate(WebGate):
 
         score = max(0.0, score)
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
-        evidence = "; ".join(issues) if issues else f"Report complete ({len(content)} chars, {len(headings)} sections)"
+        evidence = (
+            "; ".join(issues)
+            if issues
+            else f"Report complete ({len(content)} chars, {len(headings)} sections)"
+        )
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
@@ -136,30 +150,51 @@ class ReportScorePresentGate(WebGate):
         content = _get_report_content(client_dir)
         if not content:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=0.0,
-                evidence="No report found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=0.0,
+                evidence="No report found",
+                duration_ms=0,
+                command="",
             )
 
         # A-008 fix : accepter aussi 'éditorial', 'qualitatif', 'discovery', 'stratégique', 'phase'
         # — synonymes métier utilisés dans les templates NEXOS sans contraindre le wording.
         # `[\s*]*` au lieu de `\s*` accepte aussi le markdown bold `**` autour des séparateurs
         # (ex: `**Score éditorial** : **7.8 / 10**`).
-        score_labels = ("global", "[ée]ditorial", "qualitatif", "discovery", "strat[ée]gique", "phase")
-        pattern = rf'(?:score[\s*]*(?:{"|".join(score_labels)})|[μm])[\s*]*[:=][\s*]*(\d+\.?\d*)[\s*]*/?[\s*]*10'
+        score_labels = (
+            "global",
+            "[ée]ditorial",
+            "qualitatif",
+            "discovery",
+            "strat[ée]gique",
+            "phase",
+        )
+        pattern = rf"(?:score[\s*]*(?:{'|'.join(score_labels)})|[μm])[\s*]*[:=][\s*]*(\d+\.?\d*)[\s*]*/?[\s*]*10"
         match = re.search(pattern, content, re.IGNORECASE)
         if match:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.PASS, score=10.0,
-                evidence=f"Score found: {match.group(0)}", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.PASS,
+                score=10.0,
+                evidence=f"Score found: {match.group(0)}",
+                duration_ms=0,
+                command="",
             )
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=GateStatus.FAIL, score=3.0,
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=GateStatus.FAIL,
+            score=3.0,
             evidence="No 'Score (global|éditorial|qualitatif|discovery|stratégique|phase): X/10' pattern found",
-            duration_ms=0, command="",
+            duration_ms=0,
+            command="",
         )
 
 
@@ -176,9 +211,14 @@ class ReportSectionsGate(WebGate):
         content = _get_report_content(client_dir)
         if not content:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=0.0,
-                evidence="No report found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=0.0,
+                evidence="No report found",
+                duration_ms=0,
+                command="",
             )
 
         content_lower = content.lower()
@@ -196,15 +236,19 @@ class ReportSectionsGate(WebGate):
 
         status = GateStatus.PASS if score >= 7.0 else GateStatus.FAIL
         missing = [kw for kw in expected if kw not in content_lower]
-        evidence = (
-            f"{found}/{len(expected)} sections found"
-            + (f" (missing: {', '.join(missing)})" if missing else "")
+        evidence = f"{found}/{len(expected)} sections found" + (
+            f" (missing: {', '.join(missing)})" if missing else ""
         )
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
@@ -221,27 +265,44 @@ class NoPlaceholdersGate(WebGate):
         content = _get_report_content(client_dir)
         if not content:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=0.0,
-                evidence="No report found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=0.0,
+                evidence="No report found",
+                duration_ms=0,
+                command="",
             )
 
-        placeholders = re.findall(r'\[(?:TODO|TBD|INSERT|PLACEHOLDER|XXX|FIXME)[^\]]*\]', content, re.IGNORECASE)
+        placeholders = re.findall(
+            r"\[(?:TODO|TBD|INSERT|PLACEHOLDER|XXX|FIXME)[^\]]*\]", content, re.IGNORECASE
+        )
         count = len(placeholders)
 
         if count == 0:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.PASS, score=10.0,
-                evidence="No placeholders found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.PASS,
+                score=10.0,
+                evidence="No placeholders found",
+                duration_ms=0,
+                command="",
             )
 
         score = max(0.0, 10.0 - count * 2.0)
         examples = ", ".join(placeholders[:3])
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=GateStatus.FAIL, score=score,
-            evidence=f"{count} placeholder(s) found: {examples}", duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=GateStatus.FAIL,
+            score=score,
+            evidence=f"{count} placeholder(s) found: {examples}",
+            duration_ms=0,
+            command="",
         )
 
 
@@ -267,15 +328,21 @@ class StackDetectedGate(WebGate):
         )
         if not section_present:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=2.0,
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=2.0,
                 evidence="No §3 / tech-inspector / stack section detected",
-                duration_ms=0, command="",
+                duration_ms=0,
+                command="",
             )
 
         techs = re.findall(rf"\b(?:{_STACK_KEYWORDS})\b", content, flags=re.IGNORECASE)
         n_distinct = len({t.lower() for t in techs})
-        perf_sec_mentioned = bool(re.search(r"(?i)\b(perf|performance|s[ée]curit[ée]|security|hsts|csp)\b", content))
+        perf_sec_mentioned = bool(
+            re.search(r"(?i)\b(perf|performance|s[ée]curit[ée]|security|hsts|csp)\b", content)
+        )
 
         if n_distinct >= 3 and perf_sec_mentioned:
             score, evidence = 10.0, f"{n_distinct} technologies + perf/sec mentioned"
@@ -291,9 +358,14 @@ class StackDetectedGate(WebGate):
             status = GateStatus.FAIL
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
@@ -324,17 +396,26 @@ class UxPatternsGate(WebGate):
         )
         if not section_present:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=2.0,
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=2.0,
                 evidence="No §4 / ux-analyst / UX patterns section detected",
-                duration_ms=0, command="",
+                duration_ms=0,
+                command="",
             )
 
         patterns = re.findall(r"\bP\d{2}\b", content)
         n_patterns = len(set(patterns))
         anti_patterns = re.findall(r"(?i)anti[- ]pattern", content)
         n_anti = len(anti_patterns)
-        a11y = bool(re.search(r"(?i)wcag|a11y|accessibili|contraste|clavier|aria|touch[- ]target|prefers[- ]reduced[- ]motion", content))
+        a11y = bool(
+            re.search(
+                r"(?i)wcag|a11y|accessibili|contraste|clavier|aria|touch[- ]target|prefers[- ]reduced[- ]motion",
+                content,
+            )
+        )
 
         if n_patterns >= 5 and a11y:
             score, evidence = 10.0, f"{n_patterns} patterns + a11y detailed"
@@ -350,9 +431,14 @@ class UxPatternsGate(WebGate):
             status = GateStatus.FAIL
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
@@ -379,7 +465,9 @@ class ContentGapsGate(WebGate):
 
         section_present = bool(
             re.search(r"(?im)^#{1,3}\s*§?\s*5[\.\s]", content)
-            or re.search(r"(?i)content[- ]evaluator|contenu\s+existant|gaps?\s+de\s+contenu", content)
+            or re.search(
+                r"(?i)content[- ]evaluator|contenu\s+existant|gaps?\s+de\s+contenu", content
+            )
         )
 
         # Count blocker indicators: TBD/[bracket placeholder]/bloquante(s)/kickoff
@@ -395,16 +483,20 @@ class ContentGapsGate(WebGate):
 
         if not section_present and n_blockers == 0:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=2.0,
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=2.0,
                 evidence="No §5 content section and no blocker markers",
-                duration_ms=0, command="",
+                duration_ms=0,
+                command="",
             )
 
         # Bonus signal: a structured list of variables to fix
-        structured = bool(re.search(
-            r"(?ims)variables?\s+bloquantes?.*?(?:\n[\s\-\*\d]{1,5}.+){3,}", content
-        ))
+        structured = bool(
+            re.search(r"(?ims)variables?\s+bloquantes?.*?(?:\n[\s\-\*\d]{1,5}.+){3,}", content)
+        )
 
         if n_blockers >= 5 and structured:
             score, evidence = 10.0, f"{n_blockers} blocker hits + structured list"
@@ -420,9 +512,14 @@ class ContentGapsGate(WebGate):
             status = GateStatus.FAIL
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
@@ -443,10 +540,14 @@ class PositioningGate(WebGate):
         positioning = bool(re.search(r"(?i)\bpositionnement\b|\bpositioning\b", content))
         if not positioning:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=2.0,
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=2.0,
                 evidence="No 'positionnement' keyword found",
-                duration_ms=0, command="",
+                duration_ms=0,
+                command="",
             )
 
         # Look for an actionable recommendations block: a "Recommandations"
@@ -459,17 +560,21 @@ class PositioningGate(WebGate):
         )
         action_items = 0
         if reco_block:
-            action_items = len(re.findall(
-                r"(?im)^\s*(?:[-*]|\d+\.)\s+\S",
-                reco_block.group(1),
-            ))
+            action_items = len(
+                re.findall(
+                    r"(?im)^\s*(?:[-*]|\d+\.)\s+\S",
+                    reco_block.group(1),
+                )
+            )
 
         # SMART/quantitative signal: numbered targets, deadlines, units
-        smart = bool(re.search(
-            r"(?i)\b(?:\d+\s?(?:%|min|sec|s|ms|kb|mb|/\d+)|"
-            r"phase\s+\d+|kpi|score\s*[:=]\s*\d|μ\s*[≥>=]\s*\d)\b",
-            content,
-        ))
+        smart = bool(
+            re.search(
+                r"(?i)\b(?:\d+\s?(?:%|min|sec|s|ms|kb|mb|/\d+)|"
+                r"phase\s+\d+|kpi|score\s*[:=]\s*\d|μ\s*[≥>=]\s*\d)\b",
+                content,
+            )
+        )
 
         if action_items >= 3 and smart:
             score, evidence = 10.0, f"positioning + {action_items} action items + SMART signals"
@@ -485,9 +590,14 @@ class PositioningGate(WebGate):
             status = GateStatus.FAIL
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
@@ -513,13 +623,19 @@ class CompetitiveGapsGate(WebGate):
         if not content:
             return self._skip_result("ph0-discovery-report.md not present")
 
-        gaps_keyword = bool(re.search(r"(?i)\b(?:gaps?|diff[ée]renciation|[ée]carts?|opportunit[ée]s?)\b", content))
+        gaps_keyword = bool(
+            re.search(r"(?i)\b(?:gaps?|diff[ée]renciation|[ée]carts?|opportunit[ée]s?)\b", content)
+        )
         if not gaps_keyword:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-                status=GateStatus.FAIL, score=2.0,
+                gate_id=self.gate_id,
+                name=self.name,
+                dimension=self.dimension,
+                status=GateStatus.FAIL,
+                score=2.0,
                 evidence="No gaps / différenciation / écarts keyword",
-                duration_ms=0, command="",
+                duration_ms=0,
+                command="",
             )
 
         # Count distinct competitors. We accept either "C1..Cn" archetype tags
@@ -530,11 +646,13 @@ class CompetitiveGapsGate(WebGate):
         n_concurrents = max(n_tags, len(set(concurrents)))
 
         # Bonus: a forces/faiblesses or gaps matrix table
-        matrix = bool(re.search(
-            r"(?i)\bmatrice\b.*?(?:gaps?|forces?|faiblesses?|diff[ée]renciation)|"
-            r"\|\s*Axe\s*\|.*?\bgap",
-            content,
-        ))
+        matrix = bool(
+            re.search(
+                r"(?i)\bmatrice\b.*?(?:gaps?|forces?|faiblesses?|diff[ée]renciation)|"
+                r"\|\s*Axe\s*\|.*?\bgap",
+                content,
+            )
+        )
 
         if n_concurrents >= 5 and matrix:
             score, evidence = 10.0, f"{n_concurrents} competitors + gaps matrix"
@@ -550,9 +668,14 @@ class CompetitiveGapsGate(WebGate):
             status = GateStatus.FAIL
 
         return GateResult(
-            gate_id=self.gate_id, name=self.name, dimension=self.dimension,
-            status=status, score=score, evidence=evidence,
-            duration_ms=0, command="",
+            gate_id=self.gate_id,
+            name=self.name,
+            dimension=self.dimension,
+            status=status,
+            score=score,
+            evidence=evidence,
+            duration_ms=0,
+            command="",
         )
 
 
