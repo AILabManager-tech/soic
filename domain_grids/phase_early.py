@@ -141,7 +141,12 @@ class ReportScorePresentGate(WebGate):
                 evidence="No report found", duration_ms=0, command="",
             )
 
-        pattern = r'(?:score\s*global|[μm])\s*[:=]\s*(\d+\.?\d*)\s*/?\s*10'
+        # A-008 fix : accepter aussi 'éditorial', 'qualitatif', 'discovery', 'stratégique', 'phase'
+        # — synonymes métier utilisés dans les templates NEXOS sans contraindre le wording.
+        # `[\s*]*` au lieu de `\s*` accepte aussi le markdown bold `**` autour des séparateurs
+        # (ex: `**Score éditorial** : **7.8 / 10**`).
+        score_labels = ("global", "[ée]ditorial", "qualitatif", "discovery", "strat[ée]gique", "phase")
+        pattern = rf'(?:score[\s*]*(?:{"|".join(score_labels)})|[μm])[\s*]*[:=][\s*]*(\d+\.?\d*)[\s*]*/?[\s*]*10'
         match = re.search(pattern, content, re.IGNORECASE)
         if match:
             return GateResult(
@@ -153,7 +158,8 @@ class ReportScorePresentGate(WebGate):
         return GateResult(
             gate_id=self.gate_id, name=self.name, dimension=self.dimension,
             status=GateStatus.FAIL, score=3.0,
-            evidence="No 'Score global: X/10' pattern found", duration_ms=0, command="",
+            evidence="No 'Score (global|éditorial|qualitatif|discovery|stratégique|phase): X/10' pattern found",
+            duration_ms=0, command="",
         )
 
 
