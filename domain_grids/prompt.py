@@ -12,7 +12,8 @@ from ..models import GateResult, GateStatus
 
 
 def _collect_files(
-    path: str, extensions: tuple[str, ...] = (".md", ".txt", ".prompt"),
+    path: str,
+    extensions: tuple[str, ...] = (".md", ".txt", ".prompt"),
 ) -> list[Path]:
     """Collect prompt-like files from a path."""
     p = Path(path)
@@ -45,8 +46,12 @@ class UnresolvedVarsGate:
         files = _collect_files(path)
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No prompt files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No prompt files found",
+                duration_ms=0,
+                command="",
             )
 
         pattern = re.compile(r"\{\{[^}]*\}\}")
@@ -61,12 +66,19 @@ class UnresolvedVarsGate:
         if findings:
             evidence = f"{len(findings)} file(s) with unresolved vars: {'; '.join(findings[:5])}"
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=evidence, duration_ms=duration_ms, command="regex scan {{VAR}}",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=evidence,
+                duration_ms=duration_ms,
+                command="regex scan {{VAR}}",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence="No unresolved template variables", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence="No unresolved template variables",
+            duration_ms=duration_ms,
             command="regex scan {{VAR}}",
         )
 
@@ -94,8 +106,12 @@ class FallbackClausesGate:
         files = _collect_files(path)
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No prompt files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No prompt files found",
+                duration_ms=0,
+                command="",
             )
 
         files_with_fallback = 0
@@ -108,14 +124,20 @@ class FallbackClausesGate:
         total = len(files)
         if files_with_fallback == 0 and total > 0:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
                 evidence=f"0/{total} files contain fallback clauses",
-                duration_ms=duration_ms, command="regex scan fallback patterns",
+                duration_ms=duration_ms,
+                command="regex scan fallback patterns",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
             evidence=f"{files_with_fallback}/{total} files contain fallback clauses",
-            duration_ms=duration_ms, command="regex scan fallback patterns",
+            duration_ms=duration_ms,
+            command="regex scan fallback patterns",
         )
 
 
@@ -140,8 +162,12 @@ class FormatConstraintGate:
         files = _collect_files(path)
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No prompt files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No prompt files found",
+                duration_ms=0,
+                command="",
             )
 
         files_with_format = 0
@@ -154,14 +180,20 @@ class FormatConstraintGate:
         total = len(files)
         if files_with_format == 0 and total > 0:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
                 evidence=f"0/{total} files specify output format constraints",
-                duration_ms=duration_ms, command="regex scan format constraints",
+                duration_ms=duration_ms,
+                command="regex scan format constraints",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
             evidence=f"{files_with_format}/{total} files specify output format",
-            duration_ms=duration_ms, command="regex scan format constraints",
+            duration_ms=duration_ms,
+            command="regex scan format constraints",
         )
 
 
@@ -178,8 +210,12 @@ class MarkdownStructureGate:
         files = _collect_files(path, extensions=(".md",))
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No Markdown files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No Markdown files found",
+                duration_ms=0,
+                command="",
             )
 
         issues: list[str] = []
@@ -201,12 +237,19 @@ class MarkdownStructureGate:
         if issues:
             evidence = f"{len(issues)} issue(s): {'; '.join(issues[:5])}"
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=evidence, duration_ms=duration_ms, command="heading structure check",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=evidence,
+                duration_ms=duration_ms,
+                command="heading structure check",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence="Valid heading hierarchy", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence="Valid heading hierarchy",
+            duration_ms=duration_ms,
             command="heading structure check",
         )
 
@@ -234,8 +277,12 @@ class PlaceholderGate:
         files = _collect_files(path)
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No prompt files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No prompt files found",
+                duration_ms=0,
+                command="",
             )
 
         findings: list[str] = []
@@ -249,16 +296,21 @@ class PlaceholderGate:
 
         duration_ms = int((time.monotonic() - start) * 1000)
         if findings:
-            evidence = (
-                f"{len(findings)} file(s) with placeholders: {'; '.join(findings[:5])}"
-            )
+            evidence = f"{len(findings)} file(s) with placeholders: {'; '.join(findings[:5])}"
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=evidence, duration_ms=duration_ms, command="regex scan placeholders",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=evidence,
+                duration_ms=duration_ms,
+                command="regex scan placeholders",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence="No unresolved placeholders", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence="No unresolved placeholders",
+            duration_ms=duration_ms,
             command="regex scan placeholders",
         )
 

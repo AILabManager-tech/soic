@@ -59,7 +59,9 @@ def get_phase_gates(phase: str) -> list:
         raise ValueError(f"Unknown phase: {phase!r}. Available: {list(_PHASE_GATE_MAP)}")
     loader = _GATE_SET_REGISTRY.get(gate_set_name)
     if loader is None:
-        raise ValueError(f"Gate set {gate_set_name!r} not registered. Available: {list(_GATE_SET_REGISTRY)}")
+        raise ValueError(
+            f"Gate set {gate_set_name!r} not registered. Available: {list(_GATE_SET_REGISTRY)}"
+        )
     return loader()
 
 
@@ -73,3 +75,16 @@ from . import prompt as _prompt  # noqa: E402, F401
 from . import prose as _prose  # noqa: E402, F401
 from . import web as _web  # noqa: E402, F401
 from . import phase_early as _phase_early  # noqa: E402, F401
+
+
+def _lazy_load_audit_toolkit_gates() -> list:
+    """Lazy loader — avoids circular import with seo_gates ↔ soic_v3.models."""
+    try:
+        from .audit_toolkit_bridge import _load_audit_toolkit_gates
+
+        return _load_audit_toolkit_gates()
+    except ImportError:
+        return []
+
+
+register_gate_set("AUDIT_TOOLKIT", _lazy_load_audit_toolkit_gates)

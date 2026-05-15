@@ -130,12 +130,11 @@ class BanditGate(CodeGate):
             return self._error_result(cmd, f"JSON parse error: {proc.stdout[:200]}", duration_ms)
 
         results = data.get("results", [])
-        high_critical = sum(
-            1 for r in results if r.get("issue_severity") in ("HIGH", "CRITICAL")
-        )
+        high_critical = sum(1 for r in results if r.get("issue_severity") in ("HIGH", "CRITICAL"))
         status = GateStatus.FAIL if high_critical > 0 else GateStatus.PASS
         evidence = (
-            f"{high_critical} HIGH/CRITICAL issues" if high_critical > 0
+            f"{high_critical} HIGH/CRITICAL issues"
+            if high_critical > 0
             else "No HIGH/CRITICAL issues"
         )
 
@@ -163,9 +162,14 @@ class PytestGate(CodeGate):
 
         target = test_path or path
         cmd = [
-            "python", "-m", "pytest", target,
-            "--tb=line", "-q",
-            "-o", "addopts=",
+            "python",
+            "-m",
+            "pytest",
+            target,
+            "--tb=line",
+            "-q",
+            "-o",
+            "addopts=",
             "--continue-on-collection-errors",
         ]
         try:
@@ -274,9 +278,15 @@ class GitleaksGate(CodeGate):
             return self._skip_result()
 
         cmd = [
-            self.tool, "detect", "--source", path,
-            "--no-git", "--report-format", "json",
-            "--report-path", "/dev/stdout",
+            self.tool,
+            "detect",
+            "--source",
+            path,
+            "--no-git",
+            "--report-format",
+            "json",
+            "--report-path",
+            "/dev/stdout",
         ]
         try:
             proc, duration_ms = self._run_cmd(cmd)

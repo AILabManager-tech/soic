@@ -37,40 +37,61 @@ class YamllintGate:
     def run(self, path: str, test_path: str | None = None) -> GateResult:
         if not shutil.which(self.tool):
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence=f"Tool not found: {self.tool}", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence=f"Tool not found: {self.tool}",
+                duration_ms=0,
+                command="",
             )
 
         yaml_files = _collect_files(path, ["*.yml", "*.yaml"])
         if not yaml_files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No YAML files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No YAML files found",
+                duration_ms=0,
+                command="",
             )
 
         cmd = [self.tool, "-f", "parsable"] + [str(f) for f in yaml_files]
         start = time.monotonic()
         try:
             proc = subprocess.run(  # noqa: S603
-                cmd, capture_output=True, text=True, timeout=_GATE_TIMEOUT,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=_GATE_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.ERROR,
-                evidence="Timeout", duration_ms=0, command=" ".join(cmd[:3]),
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.ERROR,
+                evidence="Timeout",
+                duration_ms=0,
+                command=" ".join(cmd[:3]),
             )
         duration_ms = int((time.monotonic() - start) * 1000)
 
         errors = [line for line in proc.stdout.splitlines() if "[error]" in line]
         if errors:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=f"{len(errors)} YAML errors", duration_ms=duration_ms,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=f"{len(errors)} YAML errors",
+                duration_ms=duration_ms,
                 command=" ".join(cmd[:3]),
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence=f"{len(yaml_files)} YAML files clean", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence=f"{len(yaml_files)} YAML files clean",
+            duration_ms=duration_ms,
             command=" ".join(cmd[:3]),
         )
 
@@ -87,14 +108,22 @@ class DockerBuildCheckGate:
         dockerfiles = _collect_files(path, ["Dockerfile", "Dockerfile.*", "*.dockerfile"])
         if not dockerfiles:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No Dockerfiles found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No Dockerfiles found",
+                duration_ms=0,
+                command="",
             )
 
         if not shutil.which(self.tool):
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence=f"Tool not found: {self.tool}", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence=f"Tool not found: {self.tool}",
+                duration_ms=0,
+                command="",
             )
 
         start = time.monotonic()
@@ -103,7 +132,10 @@ class DockerBuildCheckGate:
             cmd = [self.tool, "build", "--check", "-f", str(df), str(df.parent)]
             try:
                 proc = subprocess.run(  # noqa: S603
-                    cmd, capture_output=True, text=True, timeout=_GATE_TIMEOUT,
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=_GATE_TIMEOUT,
                 )
                 if proc.returncode != 0:
                     errors.append(f"{df.name}: {proc.stderr[:100]}")
@@ -113,13 +145,19 @@ class DockerBuildCheckGate:
         duration_ms = int((time.monotonic() - start) * 1000)
         if errors:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
                 evidence=f"{len(errors)} Dockerfile error(s): {'; '.join(errors[:3])}",
-                duration_ms=duration_ms, command="docker build --check",
+                duration_ms=duration_ms,
+                command="docker build --check",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence=f"{len(dockerfiles)} Dockerfile(s) valid", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence=f"{len(dockerfiles)} Dockerfile(s) valid",
+            duration_ms=duration_ms,
             command="docker build --check",
         )
 
@@ -135,20 +173,31 @@ class TrivyGate:
     def run(self, path: str, test_path: str | None = None) -> GateResult:
         if not shutil.which(self.tool):
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence=f"Tool not found: {self.tool}", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence=f"Tool not found: {self.tool}",
+                duration_ms=0,
+                command="",
             )
 
         cmd = [self.tool, "fs", "--severity", "CRITICAL,HIGH", "--format", "json", path]
         start = time.monotonic()
         try:
             proc = subprocess.run(  # noqa: S603
-                cmd, capture_output=True, text=True, timeout=_GATE_TIMEOUT,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=_GATE_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.ERROR,
-                evidence="Timeout", duration_ms=0, command=" ".join(cmd),
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.ERROR,
+                evidence="Timeout",
+                duration_ms=0,
+                command=" ".join(cmd),
             )
         duration_ms = int((time.monotonic() - start) * 1000)
 
@@ -161,13 +210,19 @@ class TrivyGate:
         vulns = sum(len(r.get("Vulnerabilities", [])) for r in results)
         if vulns > 0:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=f"{vulns} HIGH/CRITICAL vulnerabilities", duration_ms=duration_ms,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=f"{vulns} HIGH/CRITICAL vulnerabilities",
+                duration_ms=duration_ms,
                 command=" ".join(cmd),
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence="No HIGH/CRITICAL vulnerabilities", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence="No HIGH/CRITICAL vulnerabilities",
+            duration_ms=duration_ms,
             command=" ".join(cmd),
         )
 
@@ -184,14 +239,22 @@ class HadolintGate:
         dockerfiles = _collect_files(path, ["Dockerfile", "Dockerfile.*", "*.dockerfile"])
         if not dockerfiles:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No Dockerfiles found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No Dockerfiles found",
+                duration_ms=0,
+                command="",
             )
 
         if not shutil.which(self.tool):
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence=f"Tool not found: {self.tool}", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence=f"Tool not found: {self.tool}",
+                duration_ms=0,
+                command="",
             )
 
         start = time.monotonic()
@@ -200,7 +263,10 @@ class HadolintGate:
             cmd = [self.tool, str(df)]
             try:
                 proc = subprocess.run(  # noqa: S603
-                    cmd, capture_output=True, text=True, timeout=_GATE_TIMEOUT,
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=_GATE_TIMEOUT,
                 )
                 if proc.returncode != 0:
                     total_issues += len(proc.stdout.strip().splitlines())
@@ -210,13 +276,19 @@ class HadolintGate:
         duration_ms = int((time.monotonic() - start) * 1000)
         if total_issues > 0:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=f"{total_issues} hadolint issue(s)", duration_ms=duration_ms,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=f"{total_issues} hadolint issue(s)",
+                duration_ms=duration_ms,
                 command=f"hadolint {dockerfiles[0].name}",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence=f"{len(dockerfiles)} Dockerfile(s) clean", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence=f"{len(dockerfiles)} Dockerfile(s) clean",
+            duration_ms=duration_ms,
             command=f"hadolint {dockerfiles[0].name}",
         )
 
@@ -243,14 +315,22 @@ class KubevalGate:
 
         if not k8s_manifests:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No Kubernetes manifests found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No Kubernetes manifests found",
+                duration_ms=0,
+                command="",
             )
 
         if not shutil.which(self.tool):
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence=f"Tool not found: {self.tool}", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence=f"Tool not found: {self.tool}",
+                duration_ms=0,
+                command="",
             )
 
         start = time.monotonic()
@@ -259,7 +339,10 @@ class KubevalGate:
             cmd = [self.tool, str(manifest)]
             try:
                 proc = subprocess.run(  # noqa: S603
-                    cmd, capture_output=True, text=True, timeout=_GATE_TIMEOUT,
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=_GATE_TIMEOUT,
                 )
                 if proc.returncode != 0:
                     errors.append(f"{manifest.name}")
@@ -269,13 +352,19 @@ class KubevalGate:
         duration_ms = int((time.monotonic() - start) * 1000)
         if errors:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
                 evidence=f"{len(errors)} invalid manifest(s): {', '.join(errors[:5])}",
-                duration_ms=duration_ms, command="kubeval",
+                duration_ms=duration_ms,
+                command="kubeval",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence=f"{len(k8s_manifests)} manifest(s) valid", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence=f"{len(k8s_manifests)} manifest(s) valid",
+            duration_ms=duration_ms,
             command="kubeval",
         )
 

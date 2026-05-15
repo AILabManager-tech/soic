@@ -12,7 +12,8 @@ from ..models import GateResult, GateStatus
 
 
 def _collect_files(
-    path: str, extensions: tuple[str, ...] = (".md", ".rst", ".txt"),
+    path: str,
+    extensions: tuple[str, ...] = (".md", ".rst", ".txt"),
 ) -> list[Path]:
     """Collect documentation files from a path."""
     p = Path(path)
@@ -45,8 +46,12 @@ class HeadingsGate:
         files = _collect_files(path)
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No documentation files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No documentation files found",
+                duration_ms=0,
+                command="",
             )
 
         issues: list[str] = []
@@ -61,16 +66,19 @@ class HeadingsGate:
         duration_ms = int((time.monotonic() - start) * 1000)
         if issues:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=(
-                    f"{len(issues)} long file(s) without headings: "
-                    f"{'; '.join(issues[:3])}"
-                ),
-                duration_ms=duration_ms, command="heading check",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=(f"{len(issues)} long file(s) without headings: {'; '.join(issues[:3])}"),
+                duration_ms=duration_ms,
+                command="heading check",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence="All long files have headings", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence="All long files have headings",
+            duration_ms=duration_ms,
             command="heading check",
         )
 
@@ -88,8 +96,12 @@ class BrokenLinksGate:
         files = _collect_files(path)
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No documentation files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No documentation files found",
+                duration_ms=0,
+                command="",
             )
 
         empty_links: list[str] = []
@@ -107,16 +119,19 @@ class BrokenLinksGate:
         duration_ms = int((time.monotonic() - start) * 1000)
         if empty_links:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=(
-                    f"{len(empty_links)} broken link(s): "
-                    f"{'; '.join(empty_links[:3])}"
-                ),
-                duration_ms=duration_ms, command="link check",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=(f"{len(empty_links)} broken link(s): {'; '.join(empty_links[:3])}"),
+                duration_ms=duration_ms,
+                command="link check",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence="No obviously broken links", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence="No obviously broken links",
+            duration_ms=duration_ms,
             command="link check",
         )
 
@@ -136,8 +151,12 @@ class CodeTextRatioGate:
         files = _collect_files(path)
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No documentation files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No documentation files found",
+                duration_ms=0,
+                command="",
             )
 
         bad_files: list[str] = []
@@ -155,16 +174,21 @@ class CodeTextRatioGate:
         duration_ms = int((time.monotonic() - start) * 1000)
         if bad_files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
                 evidence=(
-                    f"{len(bad_files)} file(s) excessive code ratio: "
-                    f"{'; '.join(bad_files[:3])}"
+                    f"{len(bad_files)} file(s) excessive code ratio: {'; '.join(bad_files[:3])}"
                 ),
-                duration_ms=duration_ms, command="code ratio check",
+                duration_ms=duration_ms,
+                command="code ratio check",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence="Code-to-text ratio acceptable", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence="Code-to-text ratio acceptable",
+            duration_ms=duration_ms,
             command="code ratio check",
         )
 
@@ -191,8 +215,12 @@ class EmptySectionsGate:
         files = _collect_files(path)
         if not files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No documentation files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No documentation files found",
+                duration_ms=0,
+                command="",
             )
 
         issues: list[str] = []
@@ -206,16 +234,22 @@ class EmptySectionsGate:
         duration_ms = int((time.monotonic() - start) * 1000)
         if issues:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
                 evidence=(
                     f"{len(issues)} file(s) with empty sections/placeholders: "
                     f"{'; '.join(issues[:5])}"
                 ),
-                duration_ms=duration_ms, command="placeholder check",
+                duration_ms=duration_ms,
+                command="placeholder check",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence="No empty sections or placeholders", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence="No empty sections or placeholders",
+            duration_ms=duration_ms,
             command="placeholder check",
         )
 
@@ -235,14 +269,17 @@ class Utf8EncodingGate:
             all_files = [p]
         else:
             all_files = sorted(
-                f for f in p.rglob("*")
-                if f.is_file() and f.suffix in (".md", ".rst", ".txt")
+                f for f in p.rglob("*") if f.is_file() and f.suffix in (".md", ".rst", ".txt")
             )
 
         if not all_files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.SKIP,
-                evidence="No documentation files found", duration_ms=0, command="",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.SKIP,
+                evidence="No documentation files found",
+                duration_ms=0,
+                command="",
             )
 
         bad_files: list[str] = []
@@ -257,16 +294,19 @@ class Utf8EncodingGate:
         duration_ms = int((time.monotonic() - start) * 1000)
         if bad_files:
             return GateResult(
-                gate_id=self.gate_id, name=self.name, status=GateStatus.FAIL,
-                evidence=(
-                    f"{len(bad_files)} file(s) not valid UTF-8: "
-                    f"{', '.join(bad_files[:5])}"
-                ),
-                duration_ms=duration_ms, command="utf-8 check",
+                gate_id=self.gate_id,
+                name=self.name,
+                status=GateStatus.FAIL,
+                evidence=(f"{len(bad_files)} file(s) not valid UTF-8: {', '.join(bad_files[:5])}"),
+                duration_ms=duration_ms,
+                command="utf-8 check",
             )
         return GateResult(
-            gate_id=self.gate_id, name=self.name, status=GateStatus.PASS,
-            evidence=f"{len(all_files)} file(s) valid UTF-8", duration_ms=duration_ms,
+            gate_id=self.gate_id,
+            name=self.name,
+            status=GateStatus.PASS,
+            evidence=f"{len(all_files)} file(s) valid UTF-8",
+            duration_ms=duration_ms,
             command="utf-8 check",
         )
 
