@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from .converger import Converger, Decision
+from .converger import Converger, Decision, PlateauDiagnosis
 from .feedback_router import FeedbackRouter
 from .gate_engine import GateEngine
 from .models import GateReport, PhaseGateReport
@@ -80,6 +80,20 @@ class LoopResult:
 # Type aliases
 IterationCallback = Callable[[int, IterationResult], None]
 RerunCallback = Callable[[str, str, int], bool]  # (phase, feedback, iteration) -> success
+EnrichedRetryHook = Callable[[PlateauDiagnosis], None]
+"""Hook invoked when `Decision.ENRICHED_RETRY` fires (P8.3).
+
+The host (NEXOS orchestrator) receives the `PlateauDiagnosis` snapshot
+captured by the Converger and can take dimension-scoped corrective action
+(e.g., trigger `auto_fix(dimensions=diagnosis.failing_dimensions)`) BEFORE
+the phase is re-prompted to the LLM. SOIC has no knowledge of what the
+host does in this hook — that decoupling keeps SOIC pure.
+
+Called exactly once per plateau: after `diagnose_plateau()` returns the
+snapshot and before `rerun_phase` re-executes the phase prompt. If the
+hook raises, the exception propagates and the loop stops with the
+exception unhandled — let the host decide on error semantics.
+"""
 
 
 class SOICIterator:
@@ -178,6 +192,7 @@ class PhaseIterator:
         store: RunStore | None = None,
         site_dir: str | None = None,
         timeout_minutes: int = 15,
+        on_enriched_retry: EnrichedRetryHook | None = None,
     ) -> None:
         self.phase = phase
         self.client_dir = client_dir
@@ -187,6 +202,11 @@ class PhaseIterator:
         self.converger = Converger(phase=phase, max_iter=max_iter)
         self.feedback_router = FeedbackRouter()
         self.store = store or RunStore(client_dir)
+        # P8.3 — optional hook invoked on Decision.ENRICHED_RETRY, after the
+        # plateau diagnosis has been captured and before the phase is re-run.
+        # SOIC ignores what the host does in the hook (typically: trigger a
+        # dimension-scoped auto-fix in NEXOS).
+        self.on_enriched_retry = on_enriched_retry
 
     def run(
         self,
@@ -232,6 +252,7 @@ class PhaseIterator:
             summary = self.converger.get_summary(decision, iteration=i)
 
             # 3. Feedback (enrich with plateau diagnosis on ENRICHED_RETRY — P8.2)
+            #    + invoke on_enriched_retry hook for dimension-scoped recovery (P8.3)
             if decision == Decision.ACCEPT:
                 feedback = "All quality criteria met. No corrective action needed."
             elif decision == Decision.ENRICHED_RETRY:
@@ -240,6 +261,12 @@ class PhaseIterator:
                     feedback = self.feedback_router.generate(report)
                 else:
                     feedback = self.feedback_router.generate_with_plateau_context(report, diagnosis)
+                    # P8.3 — let the host take dimension-scoped corrective action
+                    # before the rerun (e.g., NEXOS auto-fix on failing_dimensions).
+                    # Called AFTER diagnose_plateau and BEFORE rerun_phase so the
+                    # filesystem state seen by the rerun reflects the corrections.
+                    if self.on_enriched_retry is not None:
+                        self.on_enriched_retry(diagnosis)
             else:
                 feedback = self.feedback_router.generate(report)
 
