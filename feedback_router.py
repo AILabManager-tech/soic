@@ -6,7 +6,8 @@ dimension priority system, and OSIRIS axis feedback.
 
 from __future__ import annotations
 
-from .models import GateReport, GateResult, GateStatus, PhaseGateReport
+from .converger import PlateauDiagnosis
+from .models import GateReport, GateStatus, PhaseGateReport
 
 # ── Dimension priorities (for phase-based sorting) ───────────────────────────
 
@@ -41,7 +42,7 @@ _CODE_CORRECTIVE_TEMPLATES: dict[str, str] = {
     ),
     "C-03": (
         "**Tests (pytest):** Fix failing tests.\n"
-        "Run `python -m pytest {path} --tb=short -q -o \"addopts=\"` "
+        'Run `python -m pytest {path} --tb=short -q -o "addopts="` '
         "to identify failures. Fix broken assertions or missing fixtures."
     ),
     "C-04": (
@@ -110,10 +111,7 @@ class FeedbackRouter:
 
     def _generate_domain(self, report: GateReport) -> str:
         """Domain-based feedback (code gates C-01..C-06)."""
-        failed_gates = [
-            g for g in report.gates
-            if g.status in (GateStatus.FAIL, GateStatus.ERROR)
-        ]
+        failed_gates = [g for g in report.gates if g.status in (GateStatus.FAIL, GateStatus.ERROR)]
         if not failed_gates:
             return "All gates passed. No corrective action needed."
 
@@ -134,10 +132,7 @@ class FeedbackRouter:
 
     def _generate_phase(self, report: PhaseGateReport) -> str:
         """Phase-based feedback (web/NEXOS): top 5, prioritized by dimension."""
-        failed_gates = [
-            g for g in report.gates
-            if g.status in (GateStatus.FAIL, GateStatus.ERROR)
-        ]
+        failed_gates = [g for g in report.gates if g.status in (GateStatus.FAIL, GateStatus.ERROR)]
         if not failed_gates:
             return "All gates passed. No corrective action needed."
 
@@ -166,12 +161,57 @@ class FeedbackRouter:
 
         return "\n".join(sections)
 
+    def generate_with_plateau_context(
+        self,
+        report: GateReport | PhaseGateReport,
+        diagnosis: PlateauDiagnosis,
+    ) -> str:
+        """Produce feedback prefixed with an explicit plateau diagnosis (P8.2).
+
+        Used by the iterator on `Decision.ENRICHED_RETRY` — gives the next
+        phase prompt the exact trajectory + gates that stalled instead of a
+        regenerated context. The diagnosis is added *before* the regular
+        feedback block so the LLM reads the plateau context first.
+        """
+        base = self.generate(report)
+
+        if diagnosis.is_empty():
+            # No assertions captured (rare — coverage-stripped report).
+            return base
+
+        mu_traj = " -> ".join(f"{m:.2f}" for m in diagnosis.mu_trajectory)
+        fail_traj = " -> ".join(str(f) for f in diagnosis.fail_trajectory)
+        dims_str = ", ".join(diagnosis.failing_dimensions) or "(none)"
+
+        assertion_lines: list[str] = []
+        for a in diagnosis.failing_assertions:
+            assertion_lines.append(
+                f"- [{a.dimension}/{a.gate_id}] {a.name} (score {a.score:.1f}/10): {a.evidence}"
+            )
+
+        prefix = "\n".join(
+            [
+                "## Plateau detecte -- diagnostic injecte (P8.2)",
+                "",
+                f"Le score mu stagne malgre {diagnosis.iteration} iterations. "
+                "Ces gates n'ont pas progresse — vise-les explicitement dans ce passage.",
+                "",
+                f"- Trajectoire mu       : {mu_traj}",
+                f"- Trajectoire fail count : {fail_traj}",
+                f"- Dimensions bloquantes  : {dims_str}",
+                "",
+                "### Assertions toujours echec :",
+                *assertion_lines,
+                "",
+                "---",
+                "",
+            ]
+        )
+        return prefix + base
+
     def generate_full(self, report: PhaseGateReport) -> str:
         """Produce full feedback for ALL failed gates (for logging/reports)."""
-        failed_gates = [
-            g for g in report.gates
-            if g.status in (GateStatus.FAIL, GateStatus.ERROR)
-        ]
+        failed_gates = [g for g in report.gates if g.status in (GateStatus.FAIL, GateStatus.ERROR)]
         if not failed_gates:
             return "All gates passed. No corrective action needed."
 
@@ -212,20 +252,14 @@ _WEB_FEEDBACK: dict[str, dict[str, str]] = {
             "**Securite deficiente.** Ajoutez les headers manquants : "
             "HSTS, CSP, X-Frame-Options, Referrer-Policy."
         ),
-        "mid": (
-            "**Securite partielle.** Renforcez la CSP "
-            "et activez Permissions-Policy."
-        ),
+        "mid": ("**Securite partielle.** Renforcez la CSP et activez Permissions-Policy."),
     },
     "I": {
         "low": (
             "**Trop de trackers.** Reduisez les scripts tiers "
             "et utilisez un gestionnaire de consentement."
         ),
-        "mid": (
-            "**Quelques trackers presents.** "
-            "Verifiez la conformite RGPD/CCPA."
-        ),
+        "mid": ("**Quelques trackers presents.** Verifiez la conformite RGPD/CCPA."),
     },
     "R": {
         "low": (
@@ -285,11 +319,16 @@ class WebFeedbackRouter:
                 d = delta[axis_key]
                 delta_str = f" (delta: {d:+.1f})"
 
-            recs.append((impact, {
-                "axis": axis_key,
-                "priority": f"{impact:.2f}",
-                "recommendation": feedback + delta_str,
-            }))
+            recs.append(
+                (
+                    impact,
+                    {
+                        "axis": axis_key,
+                        "priority": f"{impact:.2f}",
+                        "recommendation": feedback + delta_str,
+                    },
+                )
+            )
 
         # Sort by impact descending
         recs.sort(key=lambda x: x[0], reverse=True)

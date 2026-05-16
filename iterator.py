@@ -129,6 +129,12 @@ class SOICIterator:
 
             if decision == Decision.ACCEPT:
                 feedback = "All gates passed. No corrective action needed."
+            elif decision == Decision.ENRICHED_RETRY:
+                diagnosis = self.converger.diagnose_plateau()
+                if diagnosis is None:
+                    feedback = self.feedback_router.generate(report)
+                else:
+                    feedback = self.feedback_router.generate_with_plateau_context(report, diagnosis)
             else:
                 feedback = self.feedback_router.generate(report)
 
@@ -225,9 +231,15 @@ class PhaseIterator:
             decision = self.converger.decide(report, iteration=i)
             summary = self.converger.get_summary(decision, iteration=i)
 
-            # 3. Feedback
+            # 3. Feedback (enrich with plateau diagnosis on ENRICHED_RETRY — P8.2)
             if decision == Decision.ACCEPT:
                 feedback = "All quality criteria met. No corrective action needed."
+            elif decision == Decision.ENRICHED_RETRY:
+                diagnosis = self.converger.diagnose_plateau()
+                if diagnosis is None:
+                    feedback = self.feedback_router.generate(report)
+                else:
+                    feedback = self.feedback_router.generate_with_plateau_context(report, diagnosis)
             else:
                 feedback = self.feedback_router.generate(report)
 
@@ -247,8 +259,10 @@ class PhaseIterator:
 
             # Stop conditions
             stop_decisions = (
-                Decision.ACCEPT, Decision.ABORT_PLATEAU,
-                Decision.ABORT_MAX_ITER, Decision.ABORT_LOW_COVERAGE,
+                Decision.ACCEPT,
+                Decision.ABORT_PLATEAU,
+                Decision.ABORT_MAX_ITER,
+                Decision.ABORT_LOW_COVERAGE,
             )
             if decision in stop_decisions:
                 loop.final_decision = decision
