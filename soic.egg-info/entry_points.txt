@@ -1,0 +1,2 @@
+[console_scripts]
+soic = soic.cli:main
