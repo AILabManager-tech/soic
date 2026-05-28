@@ -20,6 +20,17 @@ from .gate_engine import GateEngine
 from .models import GateReport, PhaseGateReport
 from .persistence import RunStore
 
+# Phase-specific timeouts (minutes) — early phases are cheap, QA is heavy
+# Rapatrié de soic-v3 distant ff996d0 (perdu au fork local mars 2026).
+_PHASE_TIMEOUTS: dict[str, int] = {
+    "ph0-discovery": 5,
+    "ph1-strategy": 5,
+    "ph2-design": 10,
+    "ph3-content": 10,
+    "ph4-build": 20,
+    "ph5-qa": 30,
+}
+
 
 @dataclass
 class IterationResult:
@@ -191,14 +202,16 @@ class PhaseIterator:
         max_iter: int = 4,
         store: RunStore | None = None,
         site_dir: str | None = None,
-        timeout_minutes: int = 15,
+        timeout_minutes: int | None = None,
         on_enriched_retry: EnrichedRetryHook | None = None,
     ) -> None:
         self.phase = phase
         self.client_dir = client_dir
         self.site_dir = site_dir
         self.max_iter = max_iter
-        self.timeout_seconds = timeout_minutes * 60
+        # Use phase-specific timeout if none provided
+        effective_timeout = timeout_minutes or _PHASE_TIMEOUTS.get(phase, 15)
+        self.timeout_seconds = effective_timeout * 60
         self.converger = Converger(phase=phase, max_iter=max_iter)
         self.feedback_router = FeedbackRouter()
         self.store = store or RunStore(client_dir)

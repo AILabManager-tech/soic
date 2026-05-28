@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import traceback
+from collections import deque
 from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
@@ -78,8 +79,8 @@ class ErrorHandler:
         if self._initialized:
             return
         self.logger = logging.getLogger("soic_v3.errors")
-        self.error_history: list[dict] = []
-        self.max_history = 1000
+        # Rapatrié de soic-v3 distant ff996d0 — deque(maxlen) O(1) vs list.pop(0) O(N)
+        self.error_history: deque[dict] = deque(maxlen=1000)
         self._initialized = True
 
     def handle(
@@ -111,8 +112,7 @@ class ErrorHandler:
         log_method("[%s] %s", report["code"], report["message"])
 
         self.error_history.append(report)
-        if len(self.error_history) > self.max_history:
-            self.error_history.pop(0)
+        # deque(maxlen) gère auto le cap — pas besoin de pop(0)
 
         if reraise:
             raise error
