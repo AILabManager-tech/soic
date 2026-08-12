@@ -8,10 +8,11 @@ import sys
 from pathlib import Path
 
 # Import domain grids to trigger auto-registration
-import soic_v3.domain_grids.code  # noqa: F401
-import soic_v3.domain_grids.infra  # noqa: F401
-import soic_v3.domain_grids.prompt  # noqa: F401
-import soic_v3.domain_grids.prose  # noqa: F401
+import soic.domain_grids.code  # noqa: F401
+import soic.domain_grids.infra  # noqa: F401
+import soic.domain_grids.prompt  # noqa: F401
+import soic.domain_grids.prose  # noqa: F401
+
 from .classifier import classify_domain
 from .converger import Decision
 from .gate_engine import GateEngine
