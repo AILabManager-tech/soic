@@ -1,5 +1,6 @@
 """Tests for soic.domain_grids.code."""
 
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from soic.domain_grids.code import (
@@ -144,3 +145,46 @@ class TestGitleaksGate:
         result = gate.run("/tmp/test")
         assert result.status == GateStatus.PASS
         assert "No secrets" in result.evidence
+
+
+class TestMissingExecutable:
+    """Un binaire absent doit dégrader la gate, pas faire tomber l'évaluation."""
+
+    def test_pytest_gate_uses_the_running_interpreter(self):
+        # Le code appelait "python" en dur. Ubuntu 24.04 ne fournit que
+        # python3 : hors venv activé, `soic evaluate --domain CODE` mourait
+        # sur un FileNotFoundError non attrapé, avant même de noter quoi que
+        # ce soit. sys.executable existe toujours, par construction.
+        import sys
+
+        gate = PytestGate()
+        with patch.object(gate, "_tool_available", return_value=True), \
+             patch.object(gate, "_run_cmd") as run_cmd:
+            run_cmd.return_value = (
+                subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+                1,
+            )
+            gate.run("/tmp")
+
+        assert run_cmd.call_args[0][0][0] == sys.executable
+
+    def test_missing_binary_yields_error_not_crash(self):
+        gate = RuffGate()
+        with patch.object(gate, "_tool_available", return_value=True), \
+             patch.object(gate, "_run_cmd", side_effect=FileNotFoundError(2, "x", "absent-bin")):
+            result = gate.run("/tmp")
+
+        assert result.status == GateStatus.ERROR
+        assert "absent-bin" in result.evidence
+
+    def test_pytest_availability_follows_the_interpreter_not_the_path(self):
+        # _tool_available cherchait un binaire pytest sur le PATH pendant que
+        # run() lançait `sys.executable -m pytest`. Un /usr/bin/pytest système
+        # faisait répondre "disponible" à un interpréteur qui n'a pas le
+        # module : la gate rendait FAIL au lieu de SKIP, et un FAIL pèse sur mu.
+        gate = PytestGate()
+        with patch("importlib.util.find_spec", return_value=None), \
+             patch("shutil.which", return_value="/usr/bin/pytest"):
+            result = gate.run("/tmp")
+
+        assert result.status == GateStatus.SKIP

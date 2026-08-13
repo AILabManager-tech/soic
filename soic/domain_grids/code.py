@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from typing import Protocol
 
-from . import register_domain
 from ..models import GateResult, GateStatus
+from . import register_domain
 
 _GATE_TIMEOUT = 120
 
@@ -89,6 +91,8 @@ class RuffGate(CodeGate):
             proc, duration_ms = self._run_cmd(cmd)
         except subprocess.TimeoutExpired:
             return self._error_result(cmd, "Timeout", 0)
+        except FileNotFoundError as exc:
+            return self._error_result(cmd, f"Executable not found: {exc.filename}", 0)
 
         output = proc.stdout + proc.stderr
         match = re.search(r"Found (\d+) error", output)
@@ -123,6 +127,8 @@ class BanditGate(CodeGate):
             proc, duration_ms = self._run_cmd(cmd)
         except subprocess.TimeoutExpired:
             return self._error_result(cmd, "Timeout", 0)
+        except FileNotFoundError as exc:
+            return self._error_result(cmd, f"Executable not found: {exc.filename}", 0)
 
         try:
             data = json.loads(proc.stdout) if proc.stdout.strip() else {}
@@ -156,13 +162,23 @@ class PytestGate(CodeGate):
     name: str = "pytest"
     tool: str = "pytest"
 
+    def _tool_available(self) -> bool:
+        # Les autres gates lancent un binaire : shutil.which suffit. Celle-ci
+        # lance `sys.executable -m pytest`, donc ce qui compte est que le
+        # module soit importable par CET interpréteur. Chercher un binaire sur
+        # le PATH répondait oui alors que l'exécution échouait, et la gate
+        # rendait FAIL au lieu de SKIP — un FAIL pèse sur mu, pas un SKIP.
+        return importlib.util.find_spec("pytest") is not None
+
     def run(self, path: str, test_path: str | None = None) -> GateResult:
         if not self._tool_available():
             return self._skip_result()
 
         target = test_path or path
         cmd = [
-            "python",
+            # sys.executable, pas "python" : Ubuntu 24.04 ne fournit que
+            # python3, et hors venv activé le binaire "python" n'existe pas.
+            sys.executable,
             "-m",
             "pytest",
             target,
@@ -176,6 +192,8 @@ class PytestGate(CodeGate):
             proc, duration_ms = self._run_cmd(cmd)
         except subprocess.TimeoutExpired:
             return self._error_result(cmd, "Timeout", 0)
+        except FileNotFoundError as exc:
+            return self._error_result(cmd, f"Executable not found: {exc.filename}", 0)
 
         output = proc.stdout + proc.stderr
         status = GateStatus.PASS if proc.returncode == 0 else GateStatus.FAIL
@@ -210,6 +228,8 @@ class RadonGate(CodeGate):
             proc, duration_ms = self._run_cmd(cmd)
         except subprocess.TimeoutExpired:
             return self._error_result(cmd, "Timeout", 0)
+        except FileNotFoundError as exc:
+            return self._error_result(cmd, f"Executable not found: {exc.filename}", 0)
 
         output = proc.stdout
         match = re.search(r"Average complexity:.*?\((\d+\.?\d*)\)", output)
@@ -248,6 +268,8 @@ class MypyGate(CodeGate):
             proc, duration_ms = self._run_cmd(cmd)
         except subprocess.TimeoutExpired:
             return self._error_result(cmd, "Timeout", 0)
+        except FileNotFoundError as exc:
+            return self._error_result(cmd, f"Executable not found: {exc.filename}", 0)
 
         output = proc.stdout + proc.stderr
         match = re.search(r"Found (\d+) error", output)
@@ -292,6 +314,8 @@ class GitleaksGate(CodeGate):
             proc, duration_ms = self._run_cmd(cmd)
         except subprocess.TimeoutExpired:
             return self._error_result(cmd, "Timeout", 0)
+        except FileNotFoundError as exc:
+            return self._error_result(cmd, f"Executable not found: {exc.filename}", 0)
 
         # gitleaks exit code: 0 = no leaks, 1 = leaks found
         try:
