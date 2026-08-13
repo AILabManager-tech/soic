@@ -7,3 +7,6 @@ __pycache__/
 build/
 dist/
 *.egg
+
+# Sortie d'exécution de RunStore — créée par tout `soic evaluate`.
+soic_runs/
