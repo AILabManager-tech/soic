@@ -161,8 +161,11 @@ class BrokenLinksGate:
                     if " " in url:
                         empty_links.append(f"{f.name}: URL malformee")
                     # Cible externe non appelee : hors de portee, rien n'est affirme.
-                elif url.startswith(("#", "mailto:", "tel:")):
-                    continue  # ancre ou protocole, non resolvable sur disque
+                elif url.startswith(("#", "mailto:", "tel:", "/")):
+                    # Ancre, protocole, ou chemin absolu de site : la racine du
+                    # site publie est inconnue depuis le disque. Non resolvable,
+                    # donc rien n'est affirme.
+                    continue
                 else:
                     # Lien local : resolvable, donc verifiable.
                     cible = (f.parent / url.split("#", 1)[0]).resolve()
@@ -262,16 +265,26 @@ class EmptySectionsGate:
     name: str = "empty-sections"
     tool: str = "regex"
 
-    # Un placeholder est un emplacement laisse a remplir. Les crochets ou
-    # chevrons en MAJUSCULES sont la forme courante des gabarits.
+    # Balises HTML inline courantes : `<span>` dans du markdown n'est pas un
+    # emplacement a remplir. Sans cette exclusion, tout document melant HTML et
+    # markdown declenche la porte.
+    _HTML_INLINE: str = (
+        r"span|strong|em|code|pre|div|p|br|hr|ul|ol|li|table|thead|tbody|tr|td|th"
+        r"|a|img|b|i|u|s|sub|sup|small|mark|kbd|abbr|details|summary|figure"
+        r"|figcaption|blockquote|section|article|header|footer|nav|main|aside|h[1-6]"
+    )
+
+    # Un placeholder est un emplacement laisse a remplir.
     _PLACEHOLDER_PATTERNS: tuple[str, ...] = (
         r"\[(?:TODO|PLACEHOLDER|TBD|FIXME|XXX|INSERT\b[^\]]*)\]",
-        r"\[[A-ZÀ-Ý][A-ZÀ-Ý0-9 ,'’/\-]{3,}\]",  # [NOM DU PROJET], [A COMPLETER]
-        r"<[a-zà-ÿA-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý0-9 _\-]{2,}>",  # <remplir>, <a definir>
+        # [NOM DU PROJET], [A COMPLETER] — mais pas le texte d'un lien markdown
+        # `[GUIDE COMPLET](...)` ni d'une reference `[VOIR][1]`.
+        r"\[[A-ZÀ-Ý][A-ZÀ-Ý0-9 ,'’/\-]{3,}\](?![(\[])",
+        # <remplir>, <PROJET> — mais pas une balise HTML ni une fermeture </...>.
+        rf"<(?!/)(?!(?:{_HTML_INLINE})>)[a-zà-ÿA-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý0-9 _\-]{{2,}}>",
         r"\bTBD\b",
         r"\bFIXME\b",
         r"(?<![\w`])TODO\b",
-        r"\.\.\.\s*$",  # ligne se terminant par des points de suspension seuls
     )
 
     # Une vraie section vide : un titre suivi d'un titre de niveau egal ou

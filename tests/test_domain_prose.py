@@ -86,6 +86,13 @@ class TestBrokenLinksGate:
         d = doc("index.md", "# Index\n\n[site](https://domaine-inexistant-zzz.invalid)\n")
         assert BrokenLinksGate().run(str(d)).status == GateStatus.PASS
 
+    def test_pass_chemin_absolu_de_site(self, doc):
+        """Faux positif introduit le 2026-08-16, puis corrige : `/docs/x.md` est
+        un chemin relatif a la racine du site publie, pas au disque. La racine
+        etant inconnue ici, le lien n'est pas resolvable et rien n'est affirme."""
+        d = doc("index.md", "# Index\n\nVoir [la doc](/docs/reference.md).\n")
+        assert BrokenLinksGate().run(str(d)).status == GateStatus.PASS
+
 
 class TestCodeTextRatioGate:
     def test_pass_ratio_raisonnable(self, doc):
@@ -125,6 +132,27 @@ class TestEmptySectionsGate:
     def test_pass_placeholder_montre_en_exemple(self, doc):
         """Un placeholder cite dans un bloc de code est une illustration, pas un trou."""
         d = doc("doc.md", "# Doc\n\n## Usage\n\n```\nremplacer [NOM DU PROJET]\n```\n\nFin.\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
+
+    # -- Faux positifs introduits par la correction du 2026-08-16, puis corriges.
+    #    Ces trois cas sont du markdown legitime : la porte doit se taire.
+
+    def test_pass_lien_dont_le_texte_est_en_majuscules(self, doc):
+        """`[GUIDE COMPLET](...)` est un lien, pas un emplacement a remplir."""
+        d = doc("cible.md", "# Cible\n\ncontenu\n")
+        (d / "doc.md").write_text(
+            "# Doc\n\n## Reference\n\nVoir le [GUIDE COMPLET](./cible.md).\n", encoding="utf-8"
+        )
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
+
+    def test_pass_html_inline(self, doc):
+        """`<span>` dans du markdown est une balise, pas un placeholder."""
+        d = doc("doc.md", "# Doc\n\n## Note\n\nCeci est <span>important</span> et <em>net</em>.\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
+
+    def test_pass_points_de_suspension(self, doc):
+        """Une phrase qui s'acheve sur des points de suspension reste de la prose."""
+        d = doc("doc.md", "# Doc\n\n## Contexte\n\nCa fonctionnait, puis plus rien...\n")
         assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
 
 
