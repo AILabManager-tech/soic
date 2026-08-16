@@ -25,12 +25,34 @@ def _collect_files(
     return sorted(files)
 
 
+class UnreadableFileError(Exception):
+    """Le fichier n'a pas pu etre lu : son contenu est inconnu, pas vide."""
+
+
 def _read_text_safe(path: Path) -> str:
-    """Read file text, handling encoding errors."""
+    """Read file text, raising when the content cannot be known.
+
+    Historique : cette fonction retournait "" sur erreur d'encodage. Un fichier
+    illisible etait alors traite comme un fichier vide, donc parfait, et passait
+    P-01 a P-04 en PASS. Seule P-05 le voyait. Un contenu inconnu ne doit pas
+    etre confondu avec un contenu sain.
+    """
     try:
         return path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, OSError):
-        return ""
+    except (UnicodeDecodeError, OSError) as exc:
+        raise UnreadableFileError(str(path)) from exc
+
+
+def _strip_code_blocks(content: str) -> str:
+    """Retire les blocs de code delimites et indentes.
+
+    Sans ca, un commentaire Python (`# ...`) dans un bloc de code se lit comme
+    un titre markdown, et un placeholder cite en exemple compte comme un vrai.
+    """
+    content = re.sub(r"```[\s\S]*?```", "", content)
+    content = re.sub(r"~~~[\s\S]*?~~~", "", content)
+    content = re.sub(r"^(?: {4}|\t).*$", "", content, flags=re.MULTILINE)
+    return content
 
 
 @dataclass
@@ -56,12 +78,24 @@ class HeadingsGate:
 
         issues: list[str] = []
         for f in files:
-            content = _read_text_safe(f)
+            try:
+                content = _read_text_safe(f)
+            except UnreadableFileError:
+                issues.append(f"{f.name} (illisible, contenu inconnu)")
+                continue
             lines = content.splitlines()
             if len(lines) > 500:
-                headings = re.findall(r"^#+\s", content, re.MULTILINE)
-                if not headings:
-                    issues.append(f"{f.name} ({len(lines)} lines, no headings)")
+                # Les titres sont cherches hors blocs de code : un commentaire
+                # `# ...` dans un bloc n'est pas un titre markdown.
+                headings = re.findall(r"^#+\s", _strip_code_blocks(content), re.MULTILINE)
+                # Un seul titre ne structure pas un fichier de plus de 500 lignes.
+                # On exige au moins un titre par tranche de 250 lignes.
+                attendu = max(1, len(lines) // 250)
+                if len(headings) < attendu:
+                    issues.append(
+                        f"{f.name} ({len(lines)} lines, {len(headings)} heading(s), "
+                        f"{attendu} attendu(s))"
+                    )
 
         duration_ms = int((time.monotonic() - start) * 1000)
         if issues:
@@ -85,7 +119,13 @@ class HeadingsGate:
 
 @dataclass
 class BrokenLinksGate:
-    """P-02: Detect broken URLs via regex check."""
+    """P-02: Liens markdown vides, malformes, ou pointant vers un fichier absent.
+
+    Portee assumee : cette porte verifie ce qui est verifiable sans reseau.
+    Les liens locaux sont resolus sur le disque ; les URL externes ne sont pas
+    appelees, donc leur cible n'est PAS validee. La porte ne pretend rien a
+    leur sujet.
+    """
 
     gate_id: str = "P-02"
     name: str = "broken-links"
@@ -107,14 +147,27 @@ class BrokenLinksGate:
         empty_links: list[str] = []
         url_pattern = re.compile(r"\[([^\]]*)\]\(([^)]*)\)")
         for f in files:
-            content = _read_text_safe(f)
-            for match in url_pattern.finditer(content):
+            try:
+                content = _read_text_safe(f)
+            except UnreadableFileError:
+                empty_links.append(f"{f.name}: illisible, contenu inconnu")
+                continue
+            for match in url_pattern.finditer(_strip_code_blocks(content)):
                 link_text, url = match.group(1), match.group(2)
-                # Check for obviously broken links
-                if not url or url.isspace():
+                url = url.strip()
+                if not url:
                     empty_links.append(f"{f.name}: [{link_text}]()")
-                elif url.startswith(("http://", "https://")) and " " in url:
-                    empty_links.append(f"{f.name}: malformed URL")
+                elif url.startswith(("http://", "https://")):
+                    if " " in url:
+                        empty_links.append(f"{f.name}: URL malformee")
+                    # Cible externe non appelee : hors de portee, rien n'est affirme.
+                elif url.startswith(("#", "mailto:", "tel:")):
+                    continue  # ancre ou protocole, non resolvable sur disque
+                else:
+                    # Lien local : resolvable, donc verifiable.
+                    cible = (f.parent / url.split("#", 1)[0]).resolve()
+                    if not cible.exists():
+                        empty_links.append(f"{f.name}: cible absente -> {url}")
 
         duration_ms = int((time.monotonic() - start) * 1000)
         if empty_links:
@@ -161,10 +214,18 @@ class CodeTextRatioGate:
 
         bad_files: list[str] = []
         for f in files:
-            content = _read_text_safe(f)
+            try:
+                content = _read_text_safe(f)
+            except UnreadableFileError:
+                bad_files.append(f"{f.name} (illisible, contenu inconnu)")
+                continue
             if len(content) < 100:
                 continue
+            # Les trois syntaxes de code : ``` , ~~~ , et l'indentation.
             code_blocks = re.findall(r"```[\s\S]*?```", content)
+            code_blocks += re.findall(r"~~~[\s\S]*?~~~", content)
+            sans_delimites = re.sub(r"(```[\s\S]*?```|~~~[\s\S]*?~~~)", "", content)
+            code_blocks += re.findall(r"^(?: {4}|\t).*$", sans_delimites, flags=re.MULTILINE)
             code_chars = sum(len(b) for b in code_blocks)
             total_chars = len(content)
             if total_chars > 0 and code_chars / total_chars > self._MAX_CODE_RATIO:
@@ -201,14 +262,22 @@ class EmptySectionsGate:
     name: str = "empty-sections"
     tool: str = "regex"
 
+    # Un placeholder est un emplacement laisse a remplir. Les crochets ou
+    # chevrons en MAJUSCULES sont la forme courante des gabarits.
     _PLACEHOLDER_PATTERNS: tuple[str, ...] = (
-        r"\[TODO\]",
-        r"\[PLACEHOLDER\]",
-        r"\[INSERT\b",
+        r"\[(?:TODO|PLACEHOLDER|TBD|FIXME|XXX|INSERT\b[^\]]*)\]",
+        r"\[[A-ZÀ-Ý][A-ZÀ-Ý0-9 ,'’/\-]{3,}\]",  # [NOM DU PROJET], [A COMPLETER]
+        r"<[a-zà-ÿA-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý0-9 _\-]{2,}>",  # <remplir>, <a definir>
         r"\bTBD\b",
         r"\bFIXME\b",
-        r"^\s*#+ .+\n\s*\n\s*#+ ",  # heading followed by empty then heading
+        r"(?<![\w`])TODO\b",
+        r"\.\.\.\s*$",  # ligne se terminant par des points de suspension seuls
     )
+
+    # Une vraie section vide : un titre suivi d'un titre de niveau egal ou
+    # inferieur, sans une ligne de contenu entre les deux. `# Titre` suivi de
+    # `## Sous-titre` est une structure normale et ne compte pas.
+    _EMPTY_SECTION: str = r"^(#{1,6}) +\S.*\n\s*\n(?=\1 |#{1,6} *\n)"
 
     def run(self, path: str, test_path: str | None = None) -> GateResult:
         start = time.monotonic()
@@ -225,11 +294,24 @@ class EmptySectionsGate:
 
         issues: list[str] = []
         for f in files:
-            content = _read_text_safe(f)
+            try:
+                content = _read_text_safe(f)
+            except UnreadableFileError:
+                issues.append(f"{f.name} (illisible)")
+                continue
+            # Hors blocs de code : un placeholder montre en exemple dans un
+            # extrait de code n'est pas un trou dans le document.
+            propre = _strip_code_blocks(content)
+            trouve = None
             for pat in self._PLACEHOLDER_PATTERNS:
-                if re.search(pat, content, re.MULTILINE):
-                    issues.append(f.name)
+                m = re.search(pat, propre, re.MULTILINE)
+                if m:
+                    trouve = m.group(0)[:24]
                     break
+            if trouve is None and re.search(self._EMPTY_SECTION, propre, re.MULTILINE):
+                trouve = "section sans contenu"
+            if trouve is not None:
+                issues.append(f"{f.name} ({trouve})")
 
         duration_ms = int((time.monotonic() - start) * 1000)
         if issues:

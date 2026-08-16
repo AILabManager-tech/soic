@@ -1,0 +1,155 @@
+"""Tests for soic.domain_grids.prose.
+
+Chaque porte porte deux tests, et c'est le second qui compte :
+
+- un cas SAIN, qui doit rendre PASS — il verifie que la porte ne bloque pas tout ;
+- un CONTRE-EXEMPLE, qui doit rendre FAIL — il verifie que la porte n'est pas aveugle.
+
+Un cas sain seul ne prouve rien : une porte qui repondrait PASS a tout le passerait
+aussi. Les contre-exemples ci-dessous sont ceux qui ont fait tomber P-01, P-02, P-03
+et P-04 lors de l'essai du 2026-08-16.
+"""
+
+import pytest
+
+from soic.domain_grids.prose import (
+    BrokenLinksGate,
+    CodeTextRatioGate,
+    EmptySectionsGate,
+    HeadingsGate,
+    Utf8EncodingGate,
+)
+from soic.models import GateStatus
+
+
+@pytest.fixture
+def doc(tmp_path):
+    """Ecrit un fichier markdown dans un dossier temporaire, rend le dossier."""
+
+    def _write(nom, contenu, binaire=None):
+        p = tmp_path / nom
+        if binaire is not None:
+            p.write_bytes(binaire)
+        else:
+            p.write_text(contenu, encoding="utf-8")
+        return tmp_path
+
+    return _write
+
+
+def _long_corps(n=600, prefixe="Phrase"):
+    return "\n".join(f"{prefixe} {i} de prose ordinaire." for i in range(n))
+
+
+class TestHeadingsGate:
+    def test_pass_fichier_structure(self, doc):
+        corps = "\n\n".join(f"## Section {i}\n\n" + _long_corps(90) for i in range(6))
+        d = doc("guide.md", "# Guide\n\n" + corps)
+        assert HeadingsGate().run(str(d)).status == GateStatus.PASS
+
+    def test_fail_commentaire_de_code_pris_pour_un_titre(self, doc):
+        """Contre-exemple : aucun titre, seul un `#` a l'interieur d'un bloc de code.
+
+        Avant correction, `re.findall(r"^#+\\s")` sur le contenu brut voyait le
+        commentaire Python et rendait PASS sur un fichier sans aucune structure.
+        """
+        d = doc(
+            "long.md",
+            _long_corps(600) + "\n\n```python\n# pas un titre, un commentaire\nx = 1\n```\n",
+        )
+        assert HeadingsGate().run(str(d)).status == GateStatus.FAIL
+
+    def test_fail_un_seul_titre_pour_un_tres_long_fichier(self, doc):
+        """Un titre unique ne structure pas 600 lignes : il en faut un par 250."""
+        d = doc("long.md", "# Titre unique\n\n" + _long_corps(600))
+        assert HeadingsGate().run(str(d)).status == GateStatus.FAIL
+
+
+class TestBrokenLinksGate:
+    def test_pass_liens_valides(self, doc):
+        d = doc("cible.md", "# Cible\n\ncontenu\n")
+        (d / "index.md").write_text(
+            "# Index\n\n[cible](./cible.md) · [externe](https://example.com) · [ancre](#index)\n",
+            encoding="utf-8",
+        )
+        assert BrokenLinksGate().run(str(d)).status == GateStatus.PASS
+
+    def test_fail_lien_local_vers_fichier_absent(self, doc):
+        """Contre-exemple : avant correction, seuls `[x]()` et les URL a espace
+        etaient vus. Un lien local vers un fichier inexistant passait."""
+        d = doc("index.md", "# Index\n\nVoir le [guide](./absent.md).\n")
+        assert BrokenLinksGate().run(str(d)).status == GateStatus.FAIL
+
+    def test_pass_url_externe_non_appelee(self, doc):
+        """Portee assumee : la porte ne fait pas de reseau, donc elle n'affirme
+        rien sur une cible externe — meme invraisemblable."""
+        d = doc("index.md", "# Index\n\n[site](https://domaine-inexistant-zzz.invalid)\n")
+        assert BrokenLinksGate().run(str(d)).status == GateStatus.PASS
+
+
+class TestCodeTextRatioGate:
+    def test_pass_ratio_raisonnable(self, doc):
+        d = doc("guide.md", "# Guide\n\n" + _long_corps(120) + "\n\n```py\nx = 1\n```\n")
+        assert CodeTextRatioGate().run(str(d)).status == GateStatus.PASS
+
+    def test_fail_code_indente_sans_backticks(self, doc):
+        """Contre-exemple : avant correction, seuls les blocs ``` etaient comptes.
+        Un fichier fait uniquement de code indente affichait 0 % de code."""
+        code = "\n".join(f"    ligne_{i} = compute({i})" for i in range(200))
+        d = doc("toutcode.md", "Doc.\n\n" + code + "\n")
+        assert CodeTextRatioGate().run(str(d)).status == GateStatus.FAIL
+
+
+class TestEmptySectionsGate:
+    def test_pass_titre_suivi_de_sous_titre(self, doc):
+        """Non-regression : `# Titre` suivi de `## Sous-titre` est une structure
+        markdown normale. Avant correction, ce motif marquait 12 fichiers sur 12
+        comme porteurs d'une section vide."""
+        d = doc("doc.md", "# Rapport\n\n## Contexte\n\nDu contenu reel ici.\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
+
+    def test_fail_placeholder_de_gabarit(self, doc):
+        """Contre-exemple : `[NOM DU PROJET]` n'etait dans aucun motif."""
+        d = doc("doc.md", "# Rapport\n\n## Client\n\nLe client est [NOM DU PROJET].\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.FAIL
+
+    def test_fail_chevrons_et_todo_nu(self, doc):
+        d = doc("doc.md", "# Rapport\n\n## Date\n\nLivraison : <remplir>.\n\nTODO revoir.\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.FAIL
+
+    def test_fail_section_reellement_vide(self, doc):
+        """Deux titres de meme niveau sans une ligne de contenu entre eux."""
+        d = doc("doc.md", "# Doc\n\n## Contexte\n\n## Budget\n\nDu contenu.\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.FAIL
+
+    def test_pass_placeholder_montre_en_exemple(self, doc):
+        """Un placeholder cite dans un bloc de code est une illustration, pas un trou."""
+        d = doc("doc.md", "# Doc\n\n## Usage\n\n```\nremplacer [NOM DU PROJET]\n```\n\nFin.\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
+
+
+class TestUtf8EncodingGate:
+    def test_pass_utf8(self, doc):
+        d = doc("doc.md", "# Procédé\n\nVérification terminée.\n")
+        assert Utf8EncodingGate().run(str(d)).status == GateStatus.PASS
+
+    def test_fail_latin1(self, doc):
+        d = doc("doc.md", "", binaire="# Proc\xe9d\xe9\n".encode("latin-1"))
+        assert Utf8EncodingGate().run(str(d)).status == GateStatus.FAIL
+
+
+class TestFichierIllisible:
+    """Un fichier au contenu inconnu ne doit pas etre traite comme un fichier sain.
+
+    Avant correction, `_read_text_safe` rendait "" sur erreur d'encodage : les
+    quatre portes ci-dessous voyaient un fichier vide, donc parfait, et rendaient
+    PASS. Seule P-05 voyait le probleme — un fichier corrompu obtenait 4 PASS sur 5.
+    """
+
+    @pytest.mark.parametrize(
+        "gate_cls",
+        [HeadingsGate, BrokenLinksGate, CodeTextRatioGate, EmptySectionsGate],
+    )
+    def test_fail_au_lieu_de_pass_silencieux(self, doc, gate_cls):
+        d = doc("doc.md", "", binaire="# Proc\xe9d\xe9\n".encode("latin-1"))
+        assert gate_cls().run(str(d)).status == GateStatus.FAIL
