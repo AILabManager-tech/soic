@@ -6,22 +6,59 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import unquote
 
 from . import register_domain
 from ..models import GateResult, GateStatus
+
+
+# Dossiers dont le contenu n'appartient pas a l'auteur du projet, ou qui sont
+# regeneres. Sans cette exclusion, un TODO dans le README d'une dependance fait
+# echouer la porte, et un projet Node se juge sur des milliers de fichiers tiers.
+_DOSSIERS_EXCLUS: frozenset[str] = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        "node_modules",
+        ".venv",
+        "venv",
+        "env",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        "site-packages",
+        "vendor",
+        "build",
+        "dist",
+        ".next",
+        ".nuxt",
+        "out",
+        "target",
+        "coverage",
+        "htmlcov",
+        ".cache",
+    }
+)
 
 
 def _collect_files(
     path: str,
     extensions: tuple[str, ...] = (".md", ".rst", ".txt"),
 ) -> list[Path]:
-    """Collect documentation files from a path."""
+    """Collect documentation files from a path, hors dossiers tiers ou generes."""
     p = Path(path)
     if p.is_file():
         return [p] if p.suffix in extensions else []
     files: list[Path] = []
     for ext in extensions:
-        files.extend(p.rglob(f"*{ext}"))
+        files.extend(
+            f
+            for f in p.rglob(f"*{ext}")
+            if not (_DOSSIERS_EXCLUS & set(f.relative_to(p).parts[:-1]))
+        )
     return sorted(files)
 
 
@@ -86,8 +123,13 @@ class HeadingsGate:
             lines = content.splitlines()
             if len(lines) > 500:
                 # Les titres sont cherches hors blocs de code : un commentaire
-                # `# ...` dans un bloc n'est pas un titre markdown.
-                headings = re.findall(r"^#+\s", _strip_code_blocks(content), re.MULTILINE)
+                # `# ...` dans un bloc n'est pas un titre markdown. Les deux
+                # syntaxes comptent : ATX (`## Titre`) et setext (souligne par
+                # ==== ou ----), sans quoi un document structure a l'ancienne
+                # est declare sans aucun titre.
+                propre = _strip_code_blocks(content)
+                headings = re.findall(r"^#+\s", propre, re.MULTILINE)
+                headings += re.findall(r"^(?!\s*$).+\n[=-]{3,}\s*$", propre, re.MULTILINE)
                 # Un seul titre ne structure pas un fichier de plus de 500 lignes.
                 # On exige au moins un titre par tranche de 250 lignes.
                 attendu = max(1, len(lines) // 250)
@@ -167,8 +209,11 @@ class BrokenLinksGate:
                     # donc rien n'est affirme.
                     continue
                 else:
-                    # Lien local : resolvable, donc verifiable.
-                    cible = (f.parent / url.split("#", 1)[0]).resolve()
+                    # Lien local : resolvable, donc verifiable. Le chemin est
+                    # decode au prealable — `mon%20image.png` designe un fichier
+                    # dont le nom contient une espace.
+                    chemin = unquote(url.split("#", 1)[0].split("?", 1)[0])
+                    cible = (f.parent / chemin).resolve()
                     if not cible.exists():
                         empty_links.append(f"{f.name}: cible absente -> {url}")
 
@@ -277,9 +322,11 @@ class EmptySectionsGate:
     # Un placeholder est un emplacement laisse a remplir.
     _PLACEHOLDER_PATTERNS: tuple[str, ...] = (
         r"\[(?:TODO|PLACEHOLDER|TBD|FIXME|XXX|INSERT\b[^\]]*)\]",
-        # [NOM DU PROJET], [A COMPLETER] — mais pas le texte d'un lien markdown
-        # `[GUIDE COMPLET](...)` ni d'une reference `[VOIR][1]`.
-        r"\[[A-ZÀ-Ý][A-ZÀ-Ý0-9 ,'’/\-]{3,}\](?![(\[])",
+        # [NOM DU PROJET], [A COMPLETER] : au moins deux mots en majuscules.
+        # Un mot seul entre crochets est une etiquette courante ([CRITIQUE],
+        # [MINEUR]) et ne designe pas un emplacement a remplir. Exclut aussi le
+        # texte d'un lien `[GUIDE COMPLET](...)` et d'une reference `[VOIR][1]`.
+        r"\[[A-ZÀ-Ý][A-ZÀ-Ý0-9,'’/\-]*(?: +[A-ZÀ-Ý0-9,'’/\-]+)+\](?![(\[])",
         # <remplir>, <PROJET> — mais pas une balise HTML ni une fermeture </...>.
         rf"<(?!/)(?!(?:{_HTML_INLINE})>)[a-zà-ÿA-ZÀ-Ý][a-zà-ÿA-ZÀ-Ý0-9 _\-]{{2,}}>",
         r"\bTBD\b",
@@ -287,10 +334,31 @@ class EmptySectionsGate:
         r"(?<![\w`])TODO\b",
     )
 
-    # Une vraie section vide : un titre suivi d'un titre de niveau egal ou
-    # inferieur, sans une ligne de contenu entre les deux. `# Titre` suivi de
-    # `## Sous-titre` est une structure normale et ne compte pas.
-    _EMPTY_SECTION: str = r"^(#{1,6}) +\S.*\n\s*\n(?=\1 |#{1,6} *\n)"
+    @staticmethod
+    def _section_vide(contenu: str) -> str | None:
+        """Rend le titre de la premiere section sans contenu, ou None.
+
+        Une section est vide lorsqu'un titre est immediatement suivi d'un titre
+        de niveau egal ou SUPERIEUR (moins de `#`), sans une ligne de texte entre
+        les deux : la section annoncee n'a alors rien recu.
+
+        `# Titre` suivi de `## Sous-titre` est au contraire une structure
+        normale — le contenu viendra sous le sous-titre. Une expression
+        reguliere seule ne distingue pas les deux : il faut comparer les niveaux.
+        """
+        titres = [
+            (m.start(), len(m.group(1)), m.group(2).strip())
+            for m in re.finditer(r"^(#{1,6}) +(\S.*)$", contenu, re.MULTILINE)
+        ]
+        for (debut, niveau, texte), (suivant_debut, niveau_suivant, _) in zip(
+            titres, titres[1:], strict=False
+        ):
+            entre = contenu[contenu.index("\n", debut) + 1 : suivant_debut]
+            if entre.strip():
+                continue  # il y a du contenu, la section n'est pas vide
+            if niveau_suivant <= niveau:
+                return texte[:40]
+        return None
 
     def run(self, path: str, test_path: str | None = None) -> GateResult:
         start = time.monotonic()
@@ -321,8 +389,10 @@ class EmptySectionsGate:
                 if m:
                     trouve = m.group(0)[:24]
                     break
-            if trouve is None and re.search(self._EMPTY_SECTION, propre, re.MULTILINE):
-                trouve = "section sans contenu"
+            if trouve is None:
+                vide = self._section_vide(propre)
+                if vide is not None:
+                    trouve = f"section sans contenu : {vide}"
             if trouve is not None:
                 issues.append(f"{f.name} ({trouve})")
 

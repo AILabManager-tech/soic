@@ -18,6 +18,7 @@ from soic.domain_grids.prose import (
     EmptySectionsGate,
     HeadingsGate,
     Utf8EncodingGate,
+    _collect_files,
 )
 from soic.models import GateStatus
 
@@ -64,6 +65,23 @@ class TestHeadingsGate:
         d = doc("long.md", "# Titre unique\n\n" + _long_corps(600))
         assert HeadingsGate().run(str(d)).status == GateStatus.FAIL
 
+    def test_pass_titres_setext(self, doc):
+        """Les titres soulignes par ==== ou ---- comptent aussi.
+
+        `^#+\\s` seul declarait « 0 heading » sur un document parfaitement
+        structure a l'ancienne.
+        """
+        d = doc(
+            "doc.md",
+            "Guide complet\n=============\n\n"
+            + _long_corps(200)
+            + "\n\nPremiere partie\n---------------\n\n"
+            + _long_corps(200)
+            + "\n\nSeconde partie\n--------------\n\n"
+            + _long_corps(200),
+        )
+        assert HeadingsGate().run(str(d)).status == GateStatus.PASS
+
 
 class TestBrokenLinksGate:
     def test_pass_liens_valides(self, doc):
@@ -84,6 +102,13 @@ class TestBrokenLinksGate:
         """Portee assumee : la porte ne fait pas de reseau, donc elle n'affirme
         rien sur une cible externe — meme invraisemblable."""
         d = doc("index.md", "# Index\n\n[site](https://domaine-inexistant-zzz.invalid)\n")
+        assert BrokenLinksGate().run(str(d)).status == GateStatus.PASS
+
+    def test_pass_chemin_encode(self, doc):
+        """`mon%20image.png` designe un fichier dont le nom contient une espace :
+        le chemin doit etre decode avant d'etre resolu."""
+        d = doc("doc.md", "# Doc\n\n![vue](./mon%20image.png)\n")
+        (d / "mon image.png").write_bytes(b"x")
         assert BrokenLinksGate().run(str(d)).status == GateStatus.PASS
 
     def test_pass_chemin_absolu_de_site(self, doc):
@@ -129,6 +154,29 @@ class TestEmptySectionsGate:
         d = doc("doc.md", "# Doc\n\n## Contexte\n\n## Budget\n\nDu contenu.\n")
         assert EmptySectionsGate().run(str(d)).status == GateStatus.FAIL
 
+    def test_fail_section_vide_suivie_dun_niveau_superieur(self, doc):
+        """`## Vide` suivi de `# Autre` : la sous-section n'a rien recu non plus.
+
+        L'ancienne expression reguliere exigeait le meme niveau via un
+        backreference et manquait ce cas.
+        """
+        d = doc("doc.md", "# Doc\n\n## Vide\n\n# Autre chapitre\n\nDu contenu.\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.FAIL
+
+    def test_pass_etiquette_en_majuscules(self, doc):
+        """`[CRITIQUE]` est une etiquette de severite, pas un emplacement a
+        remplir. Un placeholder de gabarit compte au moins deux mots."""
+        d = doc(
+            "doc.md",
+            "# Rapport\n\n## Constats\n\n| Item | Gravite |\n|---|---|\n"
+            "| Fuite | [CRITIQUE] |\n| Lenteur | [MINEUR] |\n",
+        )
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
+
+    def test_pass_cases_a_cocher(self, doc):
+        d = doc("doc.md", "# Liste\n\n## Taches\n\n- [ ] a faire\n- [x] fait\n")
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
+
     def test_pass_placeholder_montre_en_exemple(self, doc):
         """Un placeholder cite dans un bloc de code est une illustration, pas un trou."""
         d = doc("doc.md", "# Doc\n\n## Usage\n\n```\nremplacer [NOM DU PROJET]\n```\n\nFin.\n")
@@ -164,6 +212,23 @@ class TestUtf8EncodingGate:
     def test_fail_latin1(self, doc):
         d = doc("doc.md", "", binaire="# Proc\xe9d\xe9\n".encode("latin-1"))
         assert Utf8EncodingGate().run(str(d)).status == GateStatus.FAIL
+
+
+class TestPerimetreDeCollecte:
+    """Les portes ne jugent pas le code des autres.
+
+    `rglob` ramassait `node_modules`, `.git`, `.venv`, `build`… Un TODO dans le
+    README d'une dependance faisait echouer la porte, et un projet Node se
+    jugeait sur des milliers de fichiers tiers.
+    """
+
+    def test_dossiers_tiers_et_generes_ignores(self, doc):
+        d = doc("README.md", "# Projet\n\n## Etat\n\nPropre.\n")
+        for sous in ("node_modules/paquet", ".git", ".venv/lib", "build", "dist"):
+            (d / sous).mkdir(parents=True, exist_ok=True)
+            (d / sous / "README.md").write_text("# Tiers\n\nTODO externe.\n", encoding="utf-8")
+        assert [f.name for f in _collect_files(str(d))] == ["README.md"]
+        assert EmptySectionsGate().run(str(d)).status == GateStatus.PASS
 
 
 class TestFichierIllisible:
